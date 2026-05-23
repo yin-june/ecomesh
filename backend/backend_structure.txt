@@ -1,0 +1,52 @@
+ecomesh-workspace/
+├── apps/
+│   ├── ecomesh_flutter/          # (Frontend App - outlined previously)
+│   │
+│   └── ecomesh_backend/          # ====== BACKEND SYSTEM ======
+│       ├── Dockerfile            # Containerization for cloud deployment
+│       ├── requirements.txt      # Python dependencies (FastAPI, Pandas, Scikit-learn)
+│       ├── main.py               # Application entry point & lifespan events
+│       │
+│       ├── config/               # System configurations
+│       │   ├── database.py       # SQLAlchemy (Postgres) & InfluxDB client configs
+│       │   └── settings.py       # Pydantic BaseSettings for env variables (API Keys, DB URLs)
+│       │
+│       ├── api/                  # REST API Layer (FastAPI Routers)
+│       │   ├── v1/
+│       │   │   ├── endpoints/
+│       │   │   │   ├── auth.py       # JWT Authentication & User management
+│       │   │   │   ├── zones.py      # Spatial mapping, mesh tracking, "Plug Claiming"
+│       │   │   │   ├── analytics.py # Frontend data streaming for Carbon/RM metrics
+│       │   │   │   └── control.py    # Downstream MQTT/WebSocket triggers to ESP32 Hubs
+│       │   │   └── api.py            # Combines all routers into v1 routing space
+│       │
+│       ├── core/                 # Shared logic & Middlewares
+│       │   ├── security.py       # Password hashing & JWT generation
+│       │   └── middleware.py     # CORS configuration & execution timers
+│       │
+│       ├── database/             # Relational Database Layer (PostgreSQL)
+│       │   ├── base.py           # Declarative base class for models
+│       │   ├── models.py         # SQLAlchemy schemas (User, Zone, Device, EnergyProfile)
+│       │   └── schemas.py        # Pydantic data validation models for request/response
+│       │
+│       ├── ml_engine/            # ====== AI & ANALYTICS LAYER ======
+│       │   ├── __init__.py
+│       │   ├── dataset_loader.py # Cleans/processes raw InfluxDB time-series metrics
+│       │   ├── models/
+│       │   │   └── demand_forecast.pkl # Trained predictive model binaries
+│       │   ├── pipelines/
+│       │   │   ├── train_pipeline.py  # Weekly training job for occupancy patterns
+│       │   │   └── inference.py       # Executes the "Friday Afternoon Drift" prediction
+│       │   └── nilm_processor.py  # Evaluates high-frequency loads for standby waste
+│       │
+│       ├── services/             # ====== EXTERNAL SERVICES / INGESTION ======
+│       │   ├── metmalaysia_api.py# Handles caching and fetching from MetMalaysia Weather API
+│       │   ├── tnb_tariff.py     # Computes exact pricing tiers based on commercial/residential rates
+│       │   ├── influx_service.py # Stream-writing metrics to InfluxDB time-series buckets
+│       │   └── mqtt_broker.py    # Listens to incoming hardware streams & dispatches commands
+│       │
+│       └── tests/                # Automated pytest suites for backend endpoints
+│
+└── firmware/                     # ====== HARDWARE FIRMWARE ======
+    ├── eco_zone_hub_esp32/       # PlatformIO project folder for Gateway Hub (ESP32-S3)
+    └── eco_sensor_node_nrf/      # Nordic nRF Connect SDK project for mmWave mesh nodes
