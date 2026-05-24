@@ -1,2 +1,14 @@
 .venv/ 
 build/
+.dart_tool/
+.pio/
+.vscode/
+**/ephemeral/
+**/.pio/
+**/.vscode/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/.last_build_id
+macos/Flutter/ephemeral/
+windows/flutter/ephemeral/
+linux/flutter/ephemeral/
