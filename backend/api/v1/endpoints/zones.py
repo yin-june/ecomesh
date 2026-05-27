@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database.database import get_db
+from config.database import get_db
 from database import models, schemas
 from services.mqtt_broker import mqtt_bridge
 

@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
-from database.database import get_db
+from config.database import get_db
 from database import models
 from services.mqtt_broker import mqtt_bridge
 from api.v1.endpoints.auth import get_current_user

@@ -30,15 +30,40 @@ class InfluxDataLoader:
         """
         try:
             result = self.client.query_api().query_data_frame(query, org=self.org)
-            if isinstance(result, list) and len(result) > 0:
-                df = result[0]
+            if isinstance(result, list):
+                frames = [frame for frame in result if isinstance(frame, pd.DataFrame) and not frame.empty]
+                if not frames:
+                    logger.warning("InfluxDB returned no usable training rows.")
+                    return pd.DataFrame()
+                df = pd.concat(frames, ignore_index=True, sort=False)
+            elif isinstance(result, pd.DataFrame):
+                df = result.copy()
             else:
-                df = result
-            
+                logger.warning("Unexpected InfluxDB query result type: %s", type(result).__name__)
+                return pd.DataFrame()
+
+            if df.empty:
+                logger.warning("InfluxDB returned an empty training frame.")
+                return pd.DataFrame()
+
+            if "_time" not in df.columns:
+                if "time" in df.columns:
+                    df = df.rename(columns={"time": "_time"})
+                else:
+                    logger.error("Training data is missing a time column. Available columns: %s", list(df.columns))
+                    return pd.DataFrame()
+
             # Clean up time-series data
-            df['_time'] = pd.to_datetime(df['_time'])
-            df.set_index('_time', inplace=True)
+            df["_time"] = pd.to_datetime(df["_time"], errors="coerce")
+            df = df.dropna(subset=["_time"])
+            df = df.set_index("_time")
             df = df.dropna()
+
+            required_columns = {"occupancy_count", "outdoor_temp", "energy_draw_kwh"}
+            missing_columns = required_columns.difference(df.columns)
+            if missing_columns:
+                logger.error("Training data is missing required columns: %s", sorted(missing_columns))
+                return pd.DataFrame()
             
             logger.info(f"Loaded {len(df)} rows of training data from InfluxDB.")
             return df

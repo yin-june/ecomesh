@@ -117,6 +117,12 @@ Token: ecomesh-secure-token
 docker compose exec backend python -m ml_engine.pipelines.train_pipelines
 ```
 
+If you do not have live telemetry yet, generate sample dev data first:
+
+```bash
+docker compose exec backend python -m ml_engine.pipelines.seed_sample_telemetry
+```
+
 ## Local Non-Docker Mode
 
 If you prefer running the backend directly on Windows:

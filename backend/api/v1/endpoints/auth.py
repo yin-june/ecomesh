@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
-from database.database import get_db
+from config.database import get_db
 from database import models, schemas
 from core.security import verify_password, get_password_hash, create_access_token
 from config.settings import get_settings

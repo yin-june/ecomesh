@@ -8,6 +8,7 @@ python-multipart>=0.0.9      # Required by FastAPI for OAuth2 form parsing (Logi
 # Pydantic v2 for robust schema validation and environment variable management
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
+email-validator>=2.1.1
 
 # --- Security & Authentication ---
 # JWT token generation and password hashing
