@@ -1,4 +1,7 @@
 .venv/ 
+venv/
+.env
+__pycache__/
 build/
 .dart_tool/
 .pio/

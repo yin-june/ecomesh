@@ -22,95 +22,113 @@ Before you begin, ensure you have the following installed on your development ma
 
 ---
 
-## 🐳 Step 1: Infrastructure (Databases & Broker)
+## 🐳 Step 1: Fully Containerized Dev Setup
 
-To keep the local setup clean, we use Docker to spin up PostgreSQL and InfluxDB.
+The root `docker-compose.yml` now starts PostgreSQL, InfluxDB, and the FastAPI backend together. The backend container uses the service names `postgres` and `influxdb`, so no host networking is needed.
 
-1. Create a `docker-compose.yml` file in the root of your workspace:
+1. Start everything:
+
+```bash
+docker compose up --build
+```
+
+2. Open the backend API:
+
+```text
+http://localhost:8000
+```
+
+3. Open InfluxDB:
+
+```text
+http://localhost:8086
+```
+
+## 🧠 Backend Container
+
+The backend image is built from [backend/Dockerfile](backend/Dockerfile) and runs Uvicorn with auto-reload for development. The container mounts `./backend:/app`, so code changes are picked up without rebuilding the image.
+
+If you want to run the backend outside Docker, copy `backend/.env.example` and change `POSTGRES_SERVER` to `localhost` and `INFLUX_URL` to `http://localhost:8086`.
+
+## 🗄️ Database Setup Guide
+
+### PostgreSQL
+
+The database is initialized from the Compose environment:
 
 ```yaml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: ecomesh_db
-    ports:
-      - "5432:5432"
-
-  influxdb:
-    image: influxdb:2.7
-    ports:
-      - "8086:8086"
-    environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: adminpassword
-      DOCKER_INFLUXDB_INIT_ORG: um_technothon
-      DOCKER_INFLUXDB_INIT_BUCKET: sensor_metrics
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ecomesh-secure-token
-
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgrespassword
+POSTGRES_DB=ecomesh_db
 ```
 
-2. Run the infrastructure:
+The backend connects with:
 
-``` bash 
-docker-compose up -d
+```yaml
+POSTGRES_SERVER=postgres
 ```
 
-## 🧠 Step 2: Backend API (FastAPI)
+Use these connection details in psql or a GUI client:
 
-1. Navigate to the backend directory:
+```text
+Host: localhost
+Port: 5432
+Database: ecomesh_db
+User: postgres
+Password: postgrespassword
+```
 
-``` bash
-cd apps/ecomesh_backend
-``` 
+### InfluxDB
 
-2. Create and activate a Python virtual environment:
+InfluxDB is initialized with:
 
-``` bash
-# Windows
+```yaml
+DOCKER_INFLUXDB_INIT_USERNAME=admin
+DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
+DOCKER_INFLUXDB_INIT_ORG=um_technothon
+DOCKER_INFLUXDB_INIT_BUCKET=sensor_metrics
+DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=ecomesh-secure-token
+```
+
+The backend connects with:
+
+```yaml
+INFLUX_URL=http://influxdb:8086
+```
+
+For the Influx UI or CLI, use:
+
+```text
+URL: http://localhost:8086
+Org: um_technothon
+Bucket: sensor_metrics
+Token: ecomesh-secure-token
+```
+
+### First Run Checklist
+
+1. Run `docker compose up --build`.
+2. Wait for PostgreSQL to finish initialization.
+3. Open InfluxDB once, complete any first-time setup if needed, and confirm the bucket exists.
+4. Seed or ingest telemetry before training, because the ML pipeline expects `zone_telemetry` rows with `energy_draw_kwh`, `occupancy_count`, and `outdoor_temp`.
+5. Train the model with:
+
+```bash
+docker compose exec backend python -m ml_engine.pipelines.train_pipelines
+```
+
+## Local Non-Docker Mode
+
+If you prefer running the backend directly on Windows:
+
+```bash
+cd backend
 python -m venv venv
 venv\Scripts\activate
-
-# Mac/Linux
-python3 -m venv venv
-source venv/bin/activate
-``` 
-
-3. Install dependencies:
-
-``` bash
 pip install -r requirements.txt
-``` 
-
-4. Create a .env file in apps/ecomesh_backend:
-
-``` Code snippet
-SECRET_KEY="super-secret-ecomesh-hackathon-key-2026"
-POSTGRES_USER="postgres"
-POSTGRES_PASSWORD="postgrespassword"
-POSTGRES_SERVER="localhost"
-POSTGRES_DB="ecomesh_db"
-INFLUX_URL="http://localhost:8086"
-INFLUX_TOKEN="ecomesh-secure-token"
-INFLUX_ORG="um_technothon"
-INFLUX_BUCKET="sensor_metrics"
-``` 
-
-5. Train the AI Model (Required before starting the API):
-
-``` bash
-python -m ml_engine.pipelines.train_pipeline
-```
-
-6. Start the FastAPI Server:
-
-``` bash
+python -m ml_engine.pipelines.train_pipelines
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
-``` 
+```
 
 ## ⚡ Step 3: Hardware Firmware (PlatformIO)
 **Part A: The Gateway Hub**
