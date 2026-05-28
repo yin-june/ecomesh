@@ -29,11 +29,15 @@ typedef struct struct_message {
 
 static struct_message telemetryData;
 
-// REPLACE WITH YOUR GATEWAY'S ACTUAL MAC ADDRESS
-static uint8_t gatewayMacAddress[] = {0x24, 0x0A, 0xC4, 0x00, 0x00, 0x00};
+// REPLACE WITH YOUR GATEWAY'S ACTUAL MAC ADDRESS (80:F3:DA:53:D6:30)
+static uint8_t gatewayMacAddress[] = {0x80, 0xF3, 0xDA, 0x53, 0xD6, 0x30};
 
 // Callback when data is sent
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+static void on_data_sent(const esp_now_send_info_t *esp_now_info, esp_now_send_status_t status) {
+#else
 static void on_data_sent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+#endif
     ESP_LOGI(TAG, "Last Packet Send Status: %s", status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
@@ -93,6 +97,12 @@ void app_main(void) {
     esp_wifi_init(&cfg);
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_start();
+
+    // Force Wi-Fi channel to match the Gateway's router channel (Channel 6)
+    // ESP-NOW requires both devices to be on the same Wi-Fi channel.
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_channel(6, WIFI_SECOND_CHAN_NONE);
+    esp_wifi_set_promiscuous(false);
 
     // Init ESP-NOW
     if (esp_now_init() != ESP_OK) {
