@@ -11,6 +11,9 @@
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "esp_mac.h"
+#include "mqtt_client.h"
+#include "cJSON.h"
+#include "secrets.h"
 
 // Include our custom modular components
 #include "relay_ctrl.h"
@@ -30,6 +33,64 @@ typedef struct struct_message {
 } struct_message;
 
 static struct_message incomingTelemetry;
+static esp_mqtt_client_handle_t mqtt_client = NULL;
+static char gateway_mac_str[18] = {0};
+static char telemetry_topic[64] = {0};
+static char command_topic[64] = {0};
+
+static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
+    esp_mqtt_event_handle_t event = event_data;
+    switch ((esp_mqtt_event_id_t)event_id) {
+        case MQTT_EVENT_CONNECTED:
+            ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
+            esp_mqtt_client_subscribe(mqtt_client, command_topic, 1);
+            break;
+        case MQTT_EVENT_DATA:
+            ESP_LOGI(TAG, "MQTT_EVENT_DATA from topic: %.*s", event->topic_len, event->topic);
+            if (strncmp(event->topic, command_topic, event->topic_len) == 0) {
+                // Parse command payload
+                cJSON *root = cJSON_Parse(event->data);
+                if (root) {
+                    cJSON *device = cJSON_GetObjectItem(root, "device");
+                    if (device && device->valuestring && strcmp(device->valuestring, "AC") == 0) {
+                        cJSON *temp = cJSON_GetObjectItem(root, "temp");
+                        if (temp) {
+                            ESP_LOGI(TAG, "Received MQTT Command: Set AC to %d", temp->valueint);
+                            // Here you would trigger IR logic
+                        }
+                    }
+                    cJSON_Delete(root);
+                }
+            }
+            break;
+        case MQTT_EVENT_DISCONNECTED:
+            ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+            break;
+        default:
+            break;
+    }
+}
+
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        esp_wifi_connect();
+        ESP_LOGI(TAG, "Retrying Wi-Fi connection...");
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "Wi-Fi Connected! IP Address: " IPSTR, IP2STR(&event->ip_info.ip));
+        // Start MQTT once Wi-Fi is connected
+        esp_mqtt_client_config_t mqtt_cfg = {
+            .broker.address.uri = MQTT_BROKER_URI,
+        };
+        if (mqtt_client == NULL) {
+            mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
+            esp_mqtt_client_register_event(mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+            esp_mqtt_client_start(mqtt_client);
+        }
+    }
+}
 
 // Send AC OFF signal via IR
 static void send_ac_off_signal() {
@@ -70,6 +131,14 @@ static void on_data_recv(const uint8_t *mac_addr, const uint8_t *data, int len) 
             relay_ctrl_set(0, false); // Cut off "Ghost/Standby Power"
             send_ac_off_signal();
             ESP_LOGI(TAG, "Legacy AC Off command deployed via IR.");
+        }
+
+        // Publish to MQTT
+        if (mqtt_client) {
+            char payload[128];
+            snprintf(payload, sizeof(payload), "{\"type\":\"occupancy\", \"node\":\"%s\", \"presence\":%d, \"distance\":%d}",
+                     incomingTelemetry.node_id, incomingTelemetry.presence_detected ? 1 : 0, incomingTelemetry.stationary_distance);
+            esp_mqtt_client_publish(mqtt_client, telemetry_topic, payload, 0, 1, 0);
         }
     }
 }
@@ -165,6 +234,14 @@ void pzem_monitor_task(void *pvParameters) {
         if (err == ESP_OK) {
             ESP_LOGI(TAG, "⚡ PZEM Data | V: %.1fV | I: %.3fA | P: %.1fW | E: %.1fWh | Hz: %.1f | PF: %.2f",
                      data.voltage, data.current, data.power, data.energy, data.frequency, data.pf);
+            
+            if (mqtt_client) {
+                char payload[256];
+                snprintf(payload, sizeof(payload), 
+                         "{\"type\":\"power\", \"voltage\":%.1f, \"current\":%.3f, \"power\":%.1f, \"energy\":%.1f}",
+                         data.voltage, data.current, data.power, data.energy);
+                esp_mqtt_client_publish(mqtt_client, telemetry_topic, payload, 0, 1, 0);
+            }
         } else if (err == ESP_ERR_TIMEOUT) {
             // Usually means AC power is not connected or module is off
             // ESP_LOGW(TAG, "PZEM read timeout. Is AC power connected?");
@@ -284,13 +361,32 @@ void app_main(void)
     }
     esp_netif_init();
     esp_event_loop_create_default();
+    esp_netif_create_default_wifi_sta();
+
+    esp_event_handler_instance_t instance_any_id;
+    esp_event_handler_instance_t instance_got_ip;
+    esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, &instance_any_id);
+    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, &instance_got_ip);
+
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&cfg);
+    
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASS,
+        },
+    };
     esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
     esp_wifi_start();
 
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(gateway_mac_str, sizeof(gateway_mac_str), "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    snprintf(telemetry_topic, sizeof(telemetry_topic), "ecomesh/zones/%s/telemetry", gateway_mac_str);
+    snprintf(command_topic, sizeof(command_topic), "ecomesh/zones/%s/command", gateway_mac_str);
+    
     ESP_LOGI(TAG, "Gateway Base MAC Address: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     if (esp_now_init() == ESP_OK) {
