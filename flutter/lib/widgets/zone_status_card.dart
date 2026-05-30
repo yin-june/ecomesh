@@ -4,11 +4,17 @@ import '../data/mock_data.dart';
 
 class ZoneStatusCard extends StatelessWidget {
   final int zoneIndex;
-  const ZoneStatusCard({super.key, required this.zoneIndex});
+  final String? zoneName;
+  const ZoneStatusCard({
+    super.key,
+    required this.zoneIndex,
+    this.zoneName,
+  });
 
   @override
   Widget build(BuildContext context) {
     final zone = mockZones[zoneIndex];
+    final displayName = zoneName ?? zone.name;
 
     Color statusColor;
     String statusLabel;
@@ -58,7 +64,7 @@ class ZoneStatusCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(zone.name,
+                    Text(displayName,
                         style: AppTheme.headingMedium.copyWith(fontSize: 15)),
                     Text(zone.floor,
                         style: AppTheme.bodyMedium.copyWith(fontSize: 12)),

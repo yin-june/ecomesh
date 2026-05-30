@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
-import '../data/mock_data.dart';
+import '../services/app_state.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -20,32 +21,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Profile', style: AppTheme.displayLarge.copyWith(fontSize: 26)),
-            const SizedBox(height: 20),
-            _buildProfileCard(),
-            const SizedBox(height: 20),
-            _buildPresetsSection(),
-            const SizedBox(height: 20),
-            _buildTempSection(),
-            const SizedBox(height: 20),
-            _buildPermissionsSection(),
-            const SizedBox(height: 20),
-            _buildSettingsSection(),
-            const SizedBox(height: 32),
-          ],
+    return Consumer<AppState>(builder: (context, appState, _) {
+      final user = appState.currentUser;
+      final userName = user?['full_name'] ?? 'User';
+      final userEmail = user?['email'] ?? 'user@example.com';
+
+      return SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Profile',
+                  style:
+                      AppTheme.displayLarge.copyWith(fontSize: 26)),
+              const SizedBox(height: 20),
+              _buildProfileCard(userName, userEmail),
+              const SizedBox(height: 20),
+              _buildPresetsSection(),
+              const SizedBox(height: 20),
+              _buildTempSection(),
+              const SizedBox(height: 20),
+              _buildPermissionsSection(),
+              const SizedBox(height: 20),
+              _buildSettingsSection(appState),
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
-  Widget _buildProfileCard() {
+  Widget _buildProfileCard(String userName, String userEmail) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -74,7 +83,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  mockUser.name,
+                  userName,
                   style: const TextStyle(
                     fontFamily: 'Nunito',
                     fontSize: 20,
@@ -83,65 +92,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${mockUser.persona}',
-                        style: const TextStyle(
-                          fontFamily: 'Nunito',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _profileStat('${mockUser.weekSaved} kWh', 'saved'),
-                    const SizedBox(width: 16),
-                    _profileStat('RM ${mockUser.weekSaved * 0.5}', 'this wk'),
-                  ],
+                Text(
+                  userEmail,
+                  style: TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
                 ),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _profileStat(String val, String lbl) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          val,
-          style: const TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-          ),
-        ),
-        Text(
-          lbl,
-          style: TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 11,
-            color: Colors.white.withOpacity(0.7),
-          ),
-        ),
-      ],
     );
   }
 
@@ -303,7 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSettingsSection() {
+  Widget _buildSettingsSection(AppState appState) {
     return _SectionCard(
       title: 'App Settings',
       child: Column(
@@ -325,6 +289,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: 'ℹ️',
               label: 'About EcoMesh',
               subtitle: 'v1.0.0 · Hackathon Build'),
+          const Divider(color: AppTheme.divider, height: 1),
+          GestureDetector(
+            onTap: () async {
+              await appState.logout();
+              if (mounted) {
+                Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              child: Row(
+                children: [
+                  const Text('🚪', style: TextStyle(fontSize: 18)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Sign Out',
+                            style:
+                                AppTheme.headingMedium.copyWith(fontSize: 13)),
+                        Text('Logout from your account',
+                            style:
+                                AppTheme.bodyMedium.copyWith(fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios,
+                      size: 16, color: AppTheme.textLight),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

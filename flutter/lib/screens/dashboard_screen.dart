@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart' hide Notification;
+import 'package:provider/provider.dart';
 import 'dart:async';
 import '../theme/app_theme.dart';
-import '../data/mock_data.dart';
+import '../services/app_state.dart';
 import '../widgets/zone_status_card.dart';
 import '../widgets/sensor_feed_widget.dart';
 
@@ -12,16 +13,48 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen>
-{
+class _DashboardScreenState extends State<DashboardScreen> {
   bool _awayMode = false;
   bool _showSensorFeed = false;
   Timer? _timer;
-  int _unreadCount = 2;
+  
+  List<Map<String, dynamic>> _zones = [];
+  List<Map<String, dynamic>> _notifications = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
+    _loadData();
+    // Refresh data every 30 seconds
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _loadData());
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final appState = context.read<AppState>();
+      
+      final zones = await appState.zoneService.getZones();
+      final notifications =
+          await appState.notificationService.getNotifications(limit: 5);
+      
+      if (mounted) {
+        setState(() {
+          _zones = zones ?? [];
+          _notifications = notifications ?? [];
+          _isLoading = false;
+          _errorMessage = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+      }
+    }
   }
 
   @override
@@ -53,39 +86,57 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
-              _buildHeader(),
-              const SizedBox(height: 20),
-              _buildStatusBanner(),
-              if (_showSensorFeed) ...[
+    return Consumer<AppState>(builder: (context, appState, _) {
+      final userName = appState.currentUser?['full_name'] ?? 'User';
+      final unreadCount = _notifications.length;
+
+      return SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 const SizedBox(height: 20),
-                const SensorFeedWidget(),
+                _buildHeader(userName, unreadCount),
+                const SizedBox(height: 20),
+                _buildStatusBanner(),
+                if (_showSensorFeed) ...[
+                  const SizedBox(height: 20),
+                  const SensorFeedWidget(),
+                ],
+                const SizedBox(height: 20),
+                if (_isLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Text(
+                      'Error loading data: $_errorMessage',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  )
+                else ...[
+                  _buildQuickStats(),
+                  const SizedBox(height: 20),
+                  _buildActiveZonesList(),
+                  const SizedBox(height: 20),
+                  _buildNotificationsSection(unreadCount),
+                ],
+                const SizedBox(height: 32),
               ],
-              const SizedBox(height: 20),
-              _buildQuickStats(),
-              const SizedBox(height: 20),
-              //_buildQuickControls(),
-              //const SizedBox(height: 20),
-              _buildActiveZoneCard(),
-              const SizedBox(height: 20),
-              _buildNotificationsSection(),
-              const SizedBox(height: 32),
-            ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    });
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(String userName, int unreadCount) {
     return Row(
       children: [
         Expanded(
@@ -97,7 +148,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 style: AppTheme.bodyMedium.copyWith(fontSize: 13),
               ),
               Text(
-                mockUser.name.split(' ').first,
+                userName.split(' ').first,
                 style: AppTheme.displayLarge.copyWith(fontSize: 26),
               ),
             ],
@@ -123,7 +174,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
             ),
-            if (_unreadCount > 0)
+            if (unreadCount > 0)
               Positioned(
                 top: 6,
                 right: 6,
@@ -137,7 +188,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                   child: Center(
                     child: Text(
-                      '$_unreadCount',
+                      '$unreadCount',
                       style: const TextStyle(
                           fontSize: 9,
                           color: Colors.white,
@@ -166,128 +217,129 @@ class _DashboardScreenState extends State<DashboardScreen>
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         boxShadow: AppTheme.elevatedShadow,
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.25),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: _awayMode
-                              ? Colors.white
-                              : Colors.greenAccent,
-                          shape: BoxShape.circle,
-                        ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: _awayMode
+                            ? Colors.white
+                            : Colors.greenAccent,
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(width: 5),
-                      Text(
-                        _awayMode ? 'AWAY MODE' : 'ACTIVE',
-                        style: const TextStyle(
-                          fontFamily: 'Nunito',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '24.0°C',
-                  style: TextStyle(
-                    fontFamily: 'Nunito',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white.withOpacity(0.9),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Text(
-              _awayMode
-                  ? 'Away Mode Active\nLights dimmed to 30%'
-                  : 'Desk B-01 Claimed\nLaptop & Monitor powered',
-              style: const TextStyle(
-                fontFamily: 'Nunito',
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                height: 1.3,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                _statChip(
-                  icon: Icons.bolt_rounded,
-                  label: _awayMode ? '0.3kWh/h' : '318W draw',
-                ),
-                const SizedBox(width: 8),
-                _statChip(
-                  icon: Icons.place_outlined,
-                  label: 'Zone B · L2',
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: _toggleAway,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(
-                      _awayMode ? "I'm back!" : 'Activate Away Mode',
-                      style: TextStyle(
+                    const SizedBox(width: 5),
+                    Text(
+                      _awayMode ? 'AWAY MODE' : 'ACTIVE',
+                      style: const TextStyle(
                         fontFamily: 'Nunito',
-                        fontSize: 13,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: _awayMode ? Color(0xFFFFB84D) : AppTheme.skyBlue,
+                        color: Colors.white,
+                        letterSpacing: 0.8,
                       ),
                     ),
-                  ),
+                  ],
                 ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => setState(() => _showSensorFeed = !_showSensorFeed),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: AppTheme.cardShadow,
-                    ),
-                    child: Icon(
-                      _showSensorFeed ? Icons.expand_less_rounded : Icons.sensors_rounded,
-                      color: _showSensorFeed ? AppTheme.skyBlue : AppTheme.textMid,
-                      size: 18,
-                    ),
-                  ),
+              ),
+              const Spacer(),
+              Text(
+                '24.0°C',
+                style: TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withOpacity(0.9),
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            _awayMode
+                ? 'Away Mode Active\nLights dimmed to 30%'
+                : _zones.isEmpty
+                    ? 'No active zones'
+                    : 'Zones Active\n${_zones.length} zone(s) connected',
+            style: const TextStyle(
+              fontFamily: 'Nunito',
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              height: 1.3,
             ),
-            ]
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _statChip(
+                icon: Icons.bolt_rounded,
+                label: _awayMode ? '0.3kWh/h' : '318W draw',
+              ),
+              const SizedBox(width: 8),
+              _statChip(
+                icon: Icons.place_outlined,
+                label: 'Zone Control',
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: _toggleAway,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _awayMode ? "I'm back!" : 'Activate Away Mode',
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color:
+                          _awayMode ? Color(0xFFFFB84D) : AppTheme.skyBlue,
+                    ),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => setState(() => _showSensorFeed = !_showSensorFeed),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: AppTheme.cardShadow,
+                  ),
+                  child: Icon(
+                    _showSensorFeed
+                        ? Icons.expand_less_rounded
+                        : Icons.sensors_rounded,
+                    color: _showSensorFeed ? AppTheme.skyBlue : AppTheme.textMid,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -316,7 +368,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
         ],
-        ),
+      ),
     );
   }
 
@@ -343,7 +395,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         const SizedBox(width: 12),
         _StatCard(
           label: 'Active Zones',
-          value: '2/4',
+          value: '${_zones.length}',
           sub: 'Running now',
           icon: '📡',
           color: AppTheme.textDark,
@@ -353,18 +405,45 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildActiveZoneCard() {
+  Widget _buildActiveZonesList() {
+    if (_zones.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppTheme.iceBlue,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.paleSky),
+        ),
+        child: Center(
+          child: Text(
+            'No zones available',
+            style: AppTheme.bodyMedium,
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Your Zone', style: AppTheme.headingMedium),
+        Text('Your Zones', style: AppTheme.headingMedium),
         const SizedBox(height: 12),
-        const ZoneStatusCard(zoneIndex: 1),
+        ..._zones.asMap().entries.map((entry) {
+          final index = entry.key;
+          final zone = entry.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: ZoneStatusCard(
+              zoneIndex: index,
+              zoneName: zone['name'] ?? 'Zone ${index + 1}',
+            ),
+          );
+        }),
       ],
     );
   }
 
-  Widget _buildNotificationsSection() {
+  Widget _buildNotificationsSection(int unreadCount) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -380,12 +459,27 @@ class _DashboardScreenState extends State<DashboardScreen>
           ],
         ),
         const SizedBox(height: 12),
-        ...mockNotifications.map(_buildNotifItem),
+        if (_notifications.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.iceBlue,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(
+                'No notifications yet',
+                style: AppTheme.bodyMedium,
+              ),
+            ),
+          )
+        else
+          ..._notifications.map((notif) => _buildNotifItem(notif)).toList(),
       ],
     );
   }
 
-  Widget _buildNotifItem(Notification n) {
+  Widget _buildNotifItem(Map<String, dynamic> notif) {
     final icons = {
       'arrival': '🏢',
       'saving': '💡',
@@ -398,21 +492,22 @@ class _DashboardScreenState extends State<DashboardScreen>
       'warning': AppTheme.amber,
       'summary': AppTheme.lightBlue,
     };
-    final diff = DateTime.now().difference(n.timestamp);
-    final timeStr = diff.inMinutes < 60
-        ? '${diff.inMinutes}m ago'
-        : '${diff.inHours}h ago';
+
+    final type = notif['type'] ?? 'summary';
+    final title = notif['title'] ?? 'Notification';
+    final body = notif['body'] ?? '';
+    final isRead = notif['is_read'] ?? false;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: n.isRead ? AppTheme.white : AppTheme.iceBlue,
+        color: isRead ? AppTheme.white : AppTheme.iceBlue,
         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         border: Border.all(
-          color: n.isRead ? AppTheme.divider : AppTheme.paleSky,
+          color: isRead ? AppTheme.divider : AppTheme.paleSky,
         ),
-        boxShadow: n.isRead ? [] : AppTheme.cardShadow,
+        boxShadow: isRead ? [] : AppTheme.cardShadow,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,12 +516,12 @@ class _DashboardScreenState extends State<DashboardScreen>
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: (colors[n.type] ?? AppTheme.skyBlue).withOpacity(0.12),
+              color: (colors[type] ?? AppTheme.skyBlue).withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Center(
               child: Text(
-                icons[n.type] ?? '📢',
+                icons[type] ?? '📢',
                 style: const TextStyle(fontSize: 18),
               ),
             ),
@@ -436,135 +531,20 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        n.title,
-                        style: AppTheme.headingMedium.copyWith(
-                          fontSize: 13,
-                          color: AppTheme.textDark,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      timeStr,
-                      style: AppTheme.bodyMedium.copyWith(fontSize: 11),
-                    ),
-                  ],
+                Text(
+                  title,
+                  style: AppTheme.headingMedium.copyWith(
+                    fontSize: 13,
+                    color: AppTheme.textDark,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  n.body,
+                  body,
                   style: AppTheme.bodyMedium.copyWith(fontSize: 12),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickControls() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Quick Controls', style: AppTheme.headingMedium),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _ControlButton(
-                label: _awayMode ? 'End Away' : 'Away Mode',
-                icon: _awayMode
-                    ? Icons.directions_run_rounded
-                    : Icons.coffee_rounded,
-                color: _awayMode ? AppTheme.mintGreen : AppTheme.amber,
-                bgColor: _awayMode ? AppTheme.softMint : AppTheme.softAmber,
-                onTap: _toggleAway,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _ControlButton(
-                label: 'Sensor Feed',
-                icon: Icons.sensors_rounded,
-                color: AppTheme.skyBlue,
-                bgColor: AppTheme.iceBlue,
-                onTap: () =>
-                    setState(() => _showSensorFeed = !_showSensorFeed),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _ControlButton(
-                label: 'All Off',
-                icon: Icons.power_settings_new_rounded,
-                color: AppTheme.coral,
-                bgColor: AppTheme.softCoral,
-                onTap: () => _showAllOffDialog(),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  void _showAllOffDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
-        title: const Text(
-          '⚠️ Emergency All Off',
-          style: TextStyle(
-              fontFamily: 'Nunito',
-              fontWeight: FontWeight.w800,
-              color: AppTheme.textDark),
-        ),
-        content: const Text(
-          'This will cut power to ALL zones immediately. Are you sure?',
-          style: TextStyle(fontFamily: 'Nunito', color: AppTheme.textMid),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(
-                    fontFamily: 'Nunito', color: AppTheme.textMid)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.coral,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: AppTheme.coral,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  content: const Text(
-                    '🔴 All zones powered off.',
-                    style: TextStyle(
-                        fontFamily: 'Nunito',
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white),
-                  ),
-                ),
-              );
-            },
-            child: const Text('Cut Power',
-                style: TextStyle(
-                    fontFamily: 'Nunito',
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white)),
           ),
         ],
       ),

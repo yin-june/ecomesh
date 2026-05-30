@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
+import '../services/app_state.dart';
 import 'navigation.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -17,7 +19,12 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<Offset> _slide;
 
   bool _showOnboarding = false;
+  bool _showLogin = false;
   int _selectedPersona = 0;
+  bool _isLoading = false;
+
+  final _emailCtrl = TextEditingController(text: 'test@example.com');
+  final _passwordCtrl = TextEditingController(text: 'password123');
 
   final personas = [
     {
@@ -70,19 +77,57 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _fadeCtrl.dispose();
     _slideCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
   void _continue() {
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const Navigation(),
-        transitionDuration: const Duration(milliseconds: 500),
-        transitionsBuilder: (_, anim, __, child) =>
-            FadeTransition(opacity: anim, child: child),
-      ),
-    );
+    setState(() => _showLogin = true);
+  }
+
+  Future<void> _attemptLogin() async {
+    if (_emailCtrl.text.isEmpty || _passwordCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter email and password')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final appState = context.read<AppState>();
+      final success = await appState.login(
+        email: _emailCtrl.text,
+        password: _passwordCtrl.text,
+      );
+
+      if (success && mounted) {
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => const Navigation(),
+            transitionDuration: const Duration(milliseconds: 500),
+            transitionsBuilder: (_, anim, __, child) =>
+                FadeTransition(opacity: anim, child: child),
+          ),
+        );
+      } else if (mounted) {
+        final errorMsg = appState.errorMessage ?? 'Login failed';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMsg)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -90,7 +135,163 @@ class _SplashScreenState extends State<SplashScreen>
     return Scaffold(
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 500),
-        child: _showOnboarding ? _buildOnboarding() : _buildSplash(),
+        child: _showLogin
+            ? _buildLoginScreen()
+            : _showOnboarding
+                ? _buildOnboarding()
+                : _buildSplash(),
+      ),
+    );
+  }
+
+  Widget _buildLoginScreen() {
+    return Container(
+      key: const ValueKey('login'),
+      decoration: const BoxDecoration(gradient: AppTheme.heroGradient),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.bolt_rounded,
+                      color: Colors.white, size: 24),
+                ),
+                const SizedBox(height: 36),
+                const Text(
+                  'Welcome Back',
+                  style: TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Sign in to your account',
+                  style: TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 16,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
+                ),
+                const SizedBox(height: 48),
+                // Email field
+                TextField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Email',
+                    hintStyle: TextStyle(
+                        color: Colors.white.withOpacity(0.5), fontSize: 14),
+                    prefixIcon:
+                        Icon(Icons.mail_outline, color: Colors.white.withOpacity(0.7)),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.1),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.2), width: 1),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.2), width: 1),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Password field
+                TextField(
+                  controller: _passwordCtrl,
+                  obscureText: true,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Password',
+                    hintStyle: TextStyle(
+                        color: Colors.white.withOpacity(0.5), fontSize: 14),
+                    prefixIcon:
+                        Icon(Icons.lock_outline, color: Colors.white.withOpacity(0.7)),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.1),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.2), width: 1),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.2), width: 1),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 48),
+                // Login button
+                GestureDetector(
+                  onTap: _isLoading ? null : _attemptLogin,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation(
+                                  Color(0xFF2BA3EC)),
+                            ),
+                          )
+                        : const Text(
+                            'Sign In',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'Nunito',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF2BA3EC),
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Center(
+                  child: Text(
+                    'Test credentials are pre-filled above',
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.6),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
