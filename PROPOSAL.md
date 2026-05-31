@@ -19,10 +19,10 @@ Massive amounts of electricity are wasted daily in Malaysia due to inefficient e
 
 ## Hypothesis / Objectives
 
-### Hypothesis
+### HYPOTHESIS
 By implementing high-fidelity spatial detection and edge-based predictive AI, we can fully automate power control and eliminate "ghost" power waste, adapting to individual user behaviors seamlessly.
 
-### Objectives
+### OBJECTIVES
 * **Occupancy & Spatial Detection:** Utilize advanced mmWave radar and BLE to identify real-time human presence (down to micro-vibrations like breathing).
 * **Automated Power Control:** Execute rule-based automation to manage lighting and HVAC systems efficiently.
 * **Hardware-Software Integration:** Connect physical devices through a decentralized mesh network to a real-time tracking platform.
@@ -119,7 +119,7 @@ EcoMesh removes these physical barriers by enabling: automatic lighting activati
 * **Active Hardware Control:** An integrated 4-Channel Relay physically switches power on our custom smart strip. When the mmWave sensor detects a vacated room, the relay physically cuts the circuit to idle monitors and chargers, actively killing "ghost power."
 
 **C. Data & Artificial Intelligence Layer (The "Brain")**
-* **Simulated Predictive Analytics:** To demonstrate long-term scalability, the system's architecture accounts for predictive demand. Our prototype utilizes a backend Machine Learning engine (Random Forest) showcasing how historical occupancy and real-time power draw (via the PZEM module) map against predictive curves to autonomously pre-cool zones or shift energy loads.
+* **Simulated Predictive Analytics:** To demonstrate long-term scalability, the system's architecture accounts for predictive demand. Our prototype simulates this backend capability, showcasing how historical occupancy and real-time power draw (via the PZEM module) can map against predictive curves to pre-cool zones or shift energy loads.
 * **Flexible Two-Tier Architecture:** To accommodate different privacy requirements, EcoMesh supports dual deployment models. Consumer environments can utilize a Cloud-hosted backend. Conversely, Enterprise/Campus environments can host the MQTT Broker, databases, and FastAPI backend entirely **On-Premises**, ensuring organizational data never touches the public internet.
 
 **D. User Experience & Orchestration (The "Experience")**
@@ -185,7 +185,7 @@ Beyond hardware automation, EcoMesh acts as a behavioral intervention tool desig
 | **Technical Complexity** | AC remotes transmit their full device state (Temp, Fan, Mode) in massive, complex IR pulse trains, making standard signal decoding difficult. | **Native RMT Capture (ESP-IDF):** We bypass software decoding by utilizing the ESP32’s native RMT hardware peripheral. The system simply records and replays the raw IR pulse timings for baseline states (e.g., "24°C On" and "Off"), ensuring universal compatibility without device-specific libraries. |
 | **Hardware Cost & Scalability** | Prohibitive costs of traditional high-fidelity smart building sensors and expensive infrastructure retrofits. | **Ultra-Low-Cost BOM Integration:** Avoided expensive commercial sensors by validating the highly affordable HLK-LD2410B mmWave radar (~RM 16.50) paired with ESP32-C3 nodes. This drastically reduces the per-room cost to under RM 100, ensuring immediate financial viability for campus-wide scaling. |
 | **Privacy & Ethics** | User resistance and privacy concerns regarding continuous spatial monitoring and tracking in private areas. | **100% Edge-Processed Privacy & MQTTS:** No cameras or microphones are used. The mmWave micro-vibration data is processed locally on the ESP32 hubs, destroying raw signatures at the edge. The resulting binary states are transmitted securely using MQTTS encryption to guarantee payload privacy. |
-| **System Resilience** | Campus Wi-Fi network instability or cloud server downtime causing automation failures and dead zones. | **Local-First Execution:** While the system syncs with the Flutter app via standard protocols, the core "Ghost Power Hunter" logic is hardcoded into the ESP32 edge hubs. If the external network or Central Server drops, the nodes continue to independently monitor presence and physically switch relays without disruption. |
+| **System Resilience** | Campus Wi-Fi network instability or cloud server downtime causing automation failures and dead zones. | **Local-First Execution & Two-Tier Architecture:** While the system syncs with the Flutter app via standard protocols, the core "Ghost Power Hunter" logic is hardcoded into the ESP32 edge hubs. If the external network or Central Server drops, the nodes continue to independently monitor presence and physically switch relays without disruption. Additionally, the backend can be hosted entirely On-Premises to eliminate internet-dependency entirely. |
 
 ## Conclusion
 True environmental sustainability cannot rely on users constantly remembering to flip a switch. EcoMesh removes this behavioral friction entirely by introducing a comprehensive, highly original energy mesh that autonomously adapts to human presence. By synthesizing advanced mmWave perception, local Edge-AI load monitoring, and universal retrofitting, we empower existing infrastructure to think for itself. EcoMesh doesn't just cut "ghost power" and reduce Malaysia's energy waste; it creates a user-centric, ethically sound environment where energy effortlessly follows intention, proving that the smartest buildings are the ones that adapt to us.
