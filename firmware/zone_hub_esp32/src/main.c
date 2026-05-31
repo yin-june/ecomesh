@@ -38,6 +38,21 @@ static char gateway_mac_str[18] = {0};
 static char telemetry_topic[64] = {0};
 static char command_topic[64] = {0};
 
+// Variables for IR Learning
+static rmt_symbol_word_t learned_ir_symbols[256];
+static size_t learned_ir_count = 0;
+// Test timing definitions for RMT IR (NEC protocol-like)
+static const rmt_symbol_word_t TEST_IR_SYMBOLS[] = {
+    { .duration0 = 9000, .level0 = 1, .duration1 = 4500, .level1 = 0 }, // Leader code
+    { .duration0 =  560, .level0 = 1, .duration1 =  560, .level1 = 0 }, // Logic 0
+    { .duration0 =  560, .level0 = 1, .duration1 = 1690, .level1 = 0 }, // Logic 1
+    { .duration0 =  560, .level0 = 1, .duration1 =  560, .level1 = 0 }, // Logic 0
+    { .duration0 =  560, .level0 = 1, .duration1 = 1690, .level1 = 0 }, // Logic 1
+    { .duration0 =  560, .level0 = 1, .duration1 =  560, .level1 = 0 }, // Logic 0
+    { .duration0 =  560, .level0 = 1, .duration1 =  560, .level1 = 0 }  // Stop bit
+};
+#define TEST_IR_COUNT (sizeof(TEST_IR_SYMBOLS) / sizeof(TEST_IR_SYMBOLS[0]))
+
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
     esp_mqtt_event_handle_t event = event_data;
     switch ((esp_mqtt_event_id_t)event_id) {
@@ -56,7 +71,20 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                         cJSON *temp = cJSON_GetObjectItem(root, "temp");
                         if (temp) {
                             ESP_LOGI(TAG, "Received MQTT Command: Set AC to %d", temp->valueint);
-                            // Here you would trigger IR logic
+                            if (learned_ir_count > 0) {
+                                ESP_LOGI(TAG, "Transmitting learned IR sequence...");
+                                ir_ctrl_send_raw(learned_ir_symbols, learned_ir_count);
+                            } else {
+                                ESP_LOGW(TAG, "No IR sequence learned yet. Send test sequence.");
+                                ir_ctrl_send_raw(TEST_IR_SYMBOLS, TEST_IR_COUNT);
+                            }
+                        }
+                    } else if (device && device->valuestring && strcmp(device->valuestring, "RELAY") == 0) {
+                        cJSON *state = cJSON_GetObjectItem(root, "state");
+                        if (state) {
+                            bool is_on = cJSON_IsTrue(state);
+                            relay_ctrl_set(0, is_on);
+                            ESP_LOGI(TAG, "MQTT Command: Relay set to %s", is_on ? "ON" : "OFF");
                         }
                     }
                     cJSON_Delete(root);
@@ -144,18 +172,6 @@ static void on_data_recv(const uint8_t *mac_addr, const uint8_t *data, int len) 
 }
 
 
-// Test timing definitions for RMT IR (NEC protocol-like)
-static const rmt_symbol_word_t TEST_IR_SYMBOLS[] = {
-    { .duration0 = 9000, .level0 = 1, .duration1 = 4500, .level1 = 0 }, // Leader code
-    { .duration0 =  560, .level0 = 1, .duration1 =  560, .level1 = 0 }, // Logic 0
-    { .duration0 =  560, .level0 = 1, .duration1 = 1690, .level1 = 0 }, // Logic 1
-    { .duration0 =  560, .level0 = 1, .duration1 =  560, .level1 = 0 }, // Logic 0
-    { .duration0 =  560, .level0 = 1, .duration1 = 1690, .level1 = 0 }, // Logic 1
-    { .duration0 =  560, .level0 = 1, .duration1 =  560, .level1 = 0 }, // Logic 0
-    { .duration0 =  560, .level0 = 1, .duration1 =  560, .level1 = 0 }  // Stop bit
-};
-#define TEST_IR_COUNT (sizeof(TEST_IR_SYMBOLS) / sizeof(TEST_IR_SYMBOLS[0]))
-
 // Test timing definitions for RF loopback (5 cycles of 20ms HIGH, 20ms LOW)
 static const uint32_t TEST_RF_PULSES[] = {
     20000, 20000,
@@ -180,6 +196,11 @@ void ir_receiver_task(void *pvParameters) {
         esp_err_t err = ir_ctrl_receive_raw(rx_buffer, MAX_IR_SYMBOLS, &received_count, portMAX_DELAY);
         if (err == ESP_OK && received_count > 0) {
             ESP_LOGI(TAG, "📥 IR SIGNAL CAPTURED! Received %d symbols:", received_count);
+            
+            // Save to learning buffer
+            memcpy(learned_ir_symbols, rx_buffer, sizeof(rmt_symbol_word_t) * received_count);
+            learned_ir_count = received_count;
+            ESP_LOGI(TAG, "IR sequence learned and stored in memory!");
             for (size_t i = 0; i < received_count && i < 10; i++) {
                 printf("  [%d] Dur0: %4d us (Lvl: %d), Dur1: %4d us (Lvl: %d)\n", i, 
                        (int)rx_buffer[i].duration0, (int)rx_buffer[i].level0,

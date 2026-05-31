@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../data/mock_data.dart';
+import '../screens/ir_pairing_screen.dart';
 
 class ZoneStatusCard extends StatelessWidget {
   final int zoneIndex;
@@ -161,6 +162,34 @@ class ZoneStatusCard extends StatelessWidget {
               ),
             ),
           ],
+          const SizedBox(height: 12),
+          // Actions row
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => IRPairingScreen(zoneId: zone.id)));
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.skyBlue,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.settings_remote, color: Colors.white, size: 16),
+                        SizedBox(width: 8),
+                        Text('IR Remote Setup', style: TextStyle(color: Colors.white, fontFamily: 'Nunito', fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

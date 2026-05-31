@@ -27,6 +27,23 @@ class Zone(Base):
     base_ac_target = Column(Float, default=24.0)
     
     devices = relationship("Device", back_populates="zone")
+    desks = relationship("Desk", back_populates="zone")
+
+
+class Desk(Base):
+    __tablename__ = "desks"
+
+    id = Column(String, primary_key=True, index=True)
+    zone_id = Column(String, ForeignKey("zones.id"))
+    label = Column(String)
+    x_pos = Column(Float)
+    y_pos = Column(Float)
+    is_claimed = Column(Boolean, default=False)
+    claimed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    is_powered = Column(Boolean, default=True)
+
+    zone = relationship("Zone", back_populates="desks")
+    user = relationship("User")
 
 
 class Device(Base):
