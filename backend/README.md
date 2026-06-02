@@ -160,19 +160,27 @@ This keeps the room comfortable while avoiding unnecessary compressor runtime.
 	pip install -r requirements.txt
 	```
 
-2. Seed the test user and demo zones:
+2. Configure weather API credentials in `.env`:
+
+	```env
+	OPENWEATHER_API_KEY=your_real_openweather_api_key
+	OPENWEATHER_LAT=3.1224
+	OPENWEATHER_LON=101.6561
+	```
+
+3. Seed the test user and demo zones:
 
 	```bash
 	python seed_test_user.py
 	```
 
-3. Start the backend:
+4. Start the backend:
 
 	```bash
 	uvicorn main:app --reload --host 0.0.0.0 --port 8000
 	```
 
-4. Open the interactive API docs:
+5. Open the interactive API docs:
 
 	```
 	http://127.0.0.1:8000/docs

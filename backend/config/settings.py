@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     INFLUX_ORG: str = os.getenv("INFLUX_ORG", "um_technothon")
     INFLUX_BUCKET: str = os.getenv("INFLUX_BUCKET", "sensor_metrics")
 
+    # Weather provider (OpenWeather)
+    OPENWEATHER_API_KEY: str = os.getenv("OPENWEATHER_API_KEY", "your_api_key_here")
+    OPENWEATHER_LAT: str = os.getenv("OPENWEATHER_LAT", "3.1224")
+    OPENWEATHER_LON: str = os.getenv("OPENWEATHER_LON", "101.6561")
+
     # model config configures Pydantic to read from a .env file if present
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 

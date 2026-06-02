@@ -35,12 +35,12 @@ ecomesh-workspace/
 │       │   ├── models/
 │       │   │   └── demand_forecast.pkl # Trained predictive model binaries
 │       │   ├── pipelines/
-│       │   │   ├── train_pipeline.py  # Weekly training job for occupancy patterns
+│       │   │   ├── train_pipelines.py # Weekly training job for occupancy patterns
 │       │   │   └── inference.py       # Executes the "Friday Afternoon Drift" prediction
 │       │   └── nilm_processor.py  # Evaluates high-frequency loads for standby waste
 │       │
 │       ├── services/             # ====== EXTERNAL SERVICES / INGESTION ======
-│       │   ├── metmalaysia_api.py# Handles caching and fetching from MetMalaysia Weather API
+│       │   ├── weather_api.py    # Handles caching and fetching from OpenWeather API
 │       │   ├── tnb_tariff.py     # Computes exact pricing tiers based on commercial/residential rates
 │       │   ├── influx_service.py # Stream-writing metrics to InfluxDB time-series buckets
 │       │   └── mqtt_broker.py    # Listens to incoming hardware streams & dispatches commands

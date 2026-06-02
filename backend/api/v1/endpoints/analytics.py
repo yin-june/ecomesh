@@ -1,17 +1,15 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter
 from pydantic import BaseModel
-from datetime import datetime, timedelta
-from config.database import get_db
+from datetime import datetime
 from ml_engine.pipelines.inference import HVACPredictor
 from ml_engine.dataset_loader import InfluxDataLoader
-from services.metmalaysia_api import MetMalaysiaService
+from services.weather_api import OpenWeatherService
 from services.tnb_tariff import TNBTariffCalculator
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-weather_service = MetMalaysiaService()
+weather_service = OpenWeatherService()
 
 class EnergyReading(BaseModel):
     timestamp: datetime
