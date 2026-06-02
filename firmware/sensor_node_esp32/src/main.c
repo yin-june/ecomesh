@@ -47,22 +47,36 @@ void radar_polling_task(void *pvParameters) {
         // Read raw data stream from mmWave sensor
         int length = uart_read_bytes(RADAR_UART_NUM, rx_buffer, sizeof(rx_buffer), pdMS_TO_TICKS(100));
         if (length > 0) {
-            // For demonstration/hackathon safety, we pack standard properties:
-            telemetryData.presence_detected = true; 
-            telemetryData.moving_distance = 120;       // in cm
-            telemetryData.stationary_distance = 85;    // in cm (Breathing target)
-            telemetryData.energy_level = 78;           // micro-vibration confidence score
+            // Find frame header: 0xF4, 0xF3, 0xF2, 0xF1
+            for (int i = 0; i < length - 8; i++) {
+                if (rx_buffer[i] == 0xF4 && rx_buffer[i+1] == 0xF3 && rx_buffer[i+2] == 0xF2 && rx_buffer[i+3] == 0xF1) {
+                    
+                    // Byte 8 is the Target Status (0: None, 1: Moving, 2: Stationary, 3: Both)
+                    uint8_t target_status = rx_buffer[i+8];
+                    
+                    // Parse moving distance (bytes 9-10) and energy (byte 11)
+                    uint16_t moving_dist = rx_buffer[i+9] | (rx_buffer[i+10] << 8);
+                    uint8_t moving_energy = rx_buffer[i+11];
+                    
+                    // Parse stationary distance (bytes 12-13) and energy (byte 14)
+                    uint16_t stationary_dist = rx_buffer[i+12] | (rx_buffer[i+13] << 8);
+                    uint8_t stationary_energy = rx_buffer[i+14];
+                    
+                    telemetryData.presence_detected = (target_status > 0);
+                    telemetryData.moving_distance = moving_dist;
+                    telemetryData.stationary_distance = stationary_dist;
+                    telemetryData.energy_level = (moving_energy > stationary_energy) ? moving_energy : stationary_energy;
 
-            // Send payload instantly across the local mesh space (<10ms latency)
-            esp_err_t result = esp_now_send(gatewayMacAddress, (uint8_t *) &telemetryData, sizeof(telemetryData));
-            
-            if (result == ESP_OK) {
-                ESP_LOGI(TAG, "Telemetry packet dispatched securely via ESP-NOW.");
-            } else {
-                ESP_LOGE(TAG, "Error sending the data packet.");
+                    // Send payload across local mesh space
+                    esp_err_t result = esp_now_send(gatewayMacAddress, (uint8_t *) &telemetryData, sizeof(telemetryData));
+                    if (result == ESP_OK) {
+                        ESP_LOGI(TAG, "Telemetry packet dispatched. Status: %d", target_status);
+                    }
+                    break; // Processed one frame, break out of search loop
+                }
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Poll every 1 second to maximize ultra-low power runtime
+        vTaskDelay(pdMS_TO_TICKS(500)); // Poll every 500ms
     }
 }
 
