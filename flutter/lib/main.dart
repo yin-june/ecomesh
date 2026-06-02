@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'screens/splash_screen.dart';
+import 'screens/navigation.dart';
 import 'services/app_state.dart';
 
 void main() {
@@ -39,7 +39,7 @@ class EcoMeshApp extends StatelessWidget {
           ),
           scaffoldBackgroundColor: Colors.white,
         ),
-        home: const SplashScreen(),
+        home: const Navigation(),
       ),
     );
   }

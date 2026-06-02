@@ -74,7 +74,7 @@ class _IRPairingScreenState extends State<IRPairingScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Setup Complete!', style: AppTheme.headingMedium),
+        title: Text('Setup Complete!', style: AppTheme.headingMedium),
         content: const Text('Zone has successfully learned your AC remote commands.'),
         actions: [
           TextButton(
@@ -99,7 +99,7 @@ class _IRPairingScreenState extends State<IRPairingScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: AppTheme.textDark),
-        title: const Text(
+        title: Text(
           'IR Remote Setup',
           style: AppTheme.headingMedium,
         ),
@@ -163,10 +163,10 @@ class _IRPairingScreenState extends State<IRPairingScreen> {
             ),
             const Spacer(),
             if (_isListening)
-              const Column(
+              Column(
                 children: [
                   CircularProgressIndicator(color: AppTheme.skyBlue),
-                  SizedBox(height: 20),
+                  const SizedBox(height: 20),
                   Text("Listening for IR signal...", style: AppTheme.bodyMedium),
                 ],
               )
