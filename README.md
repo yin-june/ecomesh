@@ -15,7 +15,7 @@ Before you begin, ensure you have the following installed on your development ma
   * [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for running databases easily).
 * **Hardware:**
   * 1x ESP32-DevKitV1 (Gateway Hub)
-  * 1+ ESP32-CP2102 (Sensory Nodes)
+  * 1+ ESP32-CH340 (Sensory Nodes)
   * HLK-LD2410 mmWave Radar Sensor
   * 4-Channel 5V Relay Module
   * 940nm IR Emitter + 2N2222 Transistor
@@ -159,7 +159,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 uint8_t gatewayMacAddress[] = {0x24, 0x0A, 0xC4, 0xXX, 0xXX, 0xXX}; // Update this!
 ```
 
-4. Connect your ESP32-CP2102 node via USB and click Upload.
+4. Connect your ESP32-CH340 node via USB and click Upload.
 
 ## 📱 Step 4: Frontend App (Flutter)
 1. Navigate to the Flutter app directory:

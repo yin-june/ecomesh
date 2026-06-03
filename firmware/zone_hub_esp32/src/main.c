@@ -107,7 +107,10 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
         ESP_LOGI(TAG, "Retrying Wi-Fi connection...");
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        ESP_LOGI(TAG, "Wi-Fi Connected! IP Address: " IPSTR, IP2STR(&event->ip_info.ip));
+        uint8_t primary_chan = 0;
+        wifi_second_chan_t second_chan = 0;
+        esp_wifi_get_channel(&primary_chan, &second_chan);
+        ESP_LOGI(TAG, "Wi-Fi Connected! IP Address: " IPSTR " | Channel: %d", IP2STR(&event->ip_info.ip), primary_chan);
         // Start MQTT once Wi-Fi is connected
         esp_mqtt_client_config_t mqtt_cfg = {
             .broker.address.uri = MQTT_BROKER_URI,
@@ -401,6 +404,7 @@ void app_main(void)
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
     esp_wifi_start();
+    esp_wifi_set_ps(WIFI_PS_NONE); // Disable Wi-Fi power save for ESP-NOW reliability
 
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);

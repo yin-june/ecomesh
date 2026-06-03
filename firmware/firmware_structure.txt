@@ -1,6 +1,6 @@
 # ====== HARDWARE FIRMWARE ======
 firmware/
-├── eco_sensor_node_esp32/        # For the ESP32-CP2102 Nodes
+├── eco_sensor_node_esp32/        # For the ESP32-CH340 Nodes
 │   ├── platformio.ini
 │   └── src/
 │       └── main.cpp
