@@ -70,7 +70,8 @@ void radar_polling_task(void *pvParameters) {
                     // Send payload across local mesh space
                     esp_err_t result = esp_now_send(gatewayMacAddress, (uint8_t *) &telemetryData, sizeof(telemetryData));
                     if (result == ESP_OK) {
-                        ESP_LOGI(TAG, "Telemetry packet dispatched. Status: %d", target_status);
+                        ESP_LOGI(TAG, "Telemetry dispatched | Status: %d | MoveDist: %d cm | StatDist: %d cm | Energy: %d", 
+                                 target_status, moving_dist, stationary_dist, telemetryData.energy_level);
                     }
                     break; // Processed one frame, break out of search loop
                 }
@@ -112,10 +113,10 @@ void app_main(void) {
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_start();
 
-    // Force Wi-Fi channel to match the Gateway's router channel (Channel 6)
+    // Force Wi-Fi channel to match the Gateway's router channel (Channel 11)
     // ESP-NOW requires both devices to be on the same Wi-Fi channel.
     esp_wifi_set_promiscuous(true);
-    esp_wifi_set_channel(6, WIFI_SECOND_CHAN_NONE);
+    esp_wifi_set_channel(11, WIFI_SECOND_CHAN_NONE);
     esp_wifi_set_promiscuous(false);
 
     // Init ESP-NOW
