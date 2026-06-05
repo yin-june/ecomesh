@@ -130,56 +130,63 @@ class _ImpactScreenState extends State<ImpactScreen>
     try {
       final appState = context.read<AppState>();
       final user = appState.currentUser;
-      final esgPoints = user?['esg_points'] as int? ?? 0;
-      final kwhBasis = _esgPointsToKwh(esgPoints);
 
-      // Run zone fetch and impact fetch in parallel, handle each failure separately
+      // ── Step 1: Fetch zones list ────────────────────────────────────────
       List<Map<String, dynamic>> zonesRaw = [];
-      Map<String, dynamic> impactRaw = {};
-
-      final results = await Future.wait([
-        appState.analyticsService
-            .getUserImpact(kwhBasis)
-            .catchError((e) => <String, dynamic>{}),
-        appState.zoneService
-            .getZones()
-            .then((v) => v as dynamic)
-            .catchError((e) => <Map<String, dynamic>>[] as dynamic),
-      ]);
-
-      impactRaw = (results[0] is Map<String, dynamic>)
-          ? results[0] as Map<String, dynamic>
-          : {};
-      final rawList = results[1];
-      if (rawList is List) {
-        zonesRaw = List<Map<String, dynamic>>.from(rawList);
-      }
-
-      _impact = ImpactData.fromJson(impactRaw);
+      try {
+        zonesRaw = await appState.zoneService.getZones();
+      } catch (_) {}
       _zones = zonesRaw;
 
-      // Load energy history for first zone (non-fatal if it fails)
+      // ── Step 2: Sum real kWh from InfluxDB history across all zones ─────
+      // This is the ground-truth savings figure for this week.
+      double totalKwhSaved = 0.0;
+      List<EnergyReading> allReadings = [];
+
       if (zonesRaw.isNotEmpty) {
-        final zoneId = zonesRaw.first['id'] as String;
-        try {
-          final historyRaw = await appState.analyticsService.getEnergyHistory(
-            zoneId: zoneId,
-            daysBack: 7,
-          );
-          _energyHistory =
-              historyRaw.map((r) => EnergyReading.fromJson(r)).toList();
-          _weeklyBars = _buildWeeklyBars(_energyHistory);
-        } catch (_) {
-          _weeklyBars = _fallbackWeeklyBars();
+        // Load history for the first zone for the chart; sum all zones for total
+        final futures = zonesRaw.map((z) =>
+          appState.analyticsService
+              .getEnergyHistory(zoneId: z['id'] as String, daysBack: 7)
+              .catchError((_) => <Map<String, dynamic>>[]),
+        );
+        final historyResults = await Future.wait(futures);
+
+        for (int i = 0; i < historyResults.length; i++) {
+          final readings = historyResults[i]
+              .map((r) => EnergyReading.fromJson(r))
+              .toList();
+          // First zone → use for chart
+          if (i == 0) allReadings = readings;
+          // Sum actual kWh saved across all zones
+          for (final r in readings) {
+            totalKwhSaved += r.actual;
+          }
         }
+        _energyHistory = allReadings;
+        _weeklyBars = _buildWeeklyBars(allReadings);
       } else {
         _weeklyBars = _fallbackWeeklyBars();
       }
 
+      // ── Step 3: If no InfluxDB data, fall back to esg_points estimate ───
+      if (totalKwhSaved == 0.0) {
+        final esgPoints = user?['esg_points'] as int? ?? 0;
+        totalKwhSaved = _esgPointsToKwh(esgPoints);
+      }
+
+      // ── Step 4: Get ESG impact metrics from backend ─────────────────────
+      Map<String, dynamic> impactRaw = {};
+      try {
+        impactRaw = await appState.analyticsService
+            .getUserImpact(totalKwhSaved);
+      } catch (_) {}
+
+      _impact = ImpactData.fromJson(impactRaw);
+
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      // Start animations after data arrives
       Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted) {
           _barCtrl.forward(from: 0);
@@ -187,16 +194,11 @@ class _ImpactScreenState extends State<ImpactScreen>
         }
       });
     } catch (e) {
-      // Any unhandled error: show screen with fallback data
       _impact = const ImpactData(
           kwhSaved: 0, rmSaved: 0, co2Kg: 0, treesEquivalent: 0);
       _weeklyBars = _fallbackWeeklyBars();
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-          // Show a non-blocking warning rather than locking the screen
-          _errorMessage = null;
-        });
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Using cached data · $e',

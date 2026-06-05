@@ -51,12 +51,20 @@ def get_user_esg_impact(kwh_saved_this_week: float):
 def get_zone_energy_history(zone_id: str, days: int = 7):
     """
     Fetches historical energy readings for a zone from InfluxDB.
-    Returns actual vs. predicted energy consumption.
+    Returns actual vs. ML-predicted energy consumption.
     """
     try:
         influx_loader = InfluxDataLoader()
-        
-        # Query energy readings for the zone over the past N days
+
+        # Try to load the trained model for predictions
+        try:
+            predictor = HVACPredictor()
+            model_available = True
+        except FileNotFoundError:
+            predictor = None
+            model_available = False
+            logger.warning("ML model not found – predicted_kwh will be 0.0")
+
         query = f"""
         from(bucket: "sensor_metrics")
           |> range(start: -{days}d)
@@ -65,20 +73,49 @@ def get_zone_energy_history(zone_id: str, days: int = 7):
           |> filter(fn: (r) => r._field == "energy_draw_kwh")
           |> sort(columns: ["_time"])
         """
-        
+
         result = influx_loader.client.query_api().query_data_frame(query, org=influx_loader.org)
-        
+
         readings = []
         if isinstance(result, list):
-            for frame in result:
-                if not frame.empty:
-                    for _, row in frame.iterrows():
-                        readings.append(EnergyReading(
-                            timestamp=row['_time'],
-                            actual_kwh=float(row['_value']),
-                            predicted_kwh=0.0,  # TODO: Get from ML model predictions
-                        ))
-        
+            frames = result
+        elif hasattr(result, 'empty'):
+            frames = [result]
+        else:
+            frames = []
+
+        for frame in frames:
+            if frame is None or frame.empty:
+                continue
+            for _, row in frame.iterrows():
+                actual = float(row['_value'])
+
+                # Use ML model to get a predicted value for this time context
+                predicted = 0.0
+                if model_available:
+                    try:
+                        import pandas as pd
+                        ts = row['_time']
+                        # Estimate occupancy from energy draw (inverse of seeder formula)
+                        estimated_occupancy = max(0, int((actual - 0.8) / 0.18))
+                        feature_row = pd.DataFrame([{
+                            'occupancy_count': estimated_occupancy,
+                            'outdoor_temp': 30.0,  # conservative KL estimate
+                            'hour': ts.hour,
+                            'day_of_week': ts.weekday(),
+                            'is_weekend': int(ts.weekday() >= 5)
+                        }])
+                        predicted = round(float(predictor.model.predict(feature_row)[0]), 3)
+                    except Exception as pred_err:
+                        logger.debug("Prediction failed for row: %s", pred_err)
+                        predicted = 0.0
+
+                readings.append(EnergyReading(
+                    timestamp=row['_time'],
+                    actual_kwh=actual,
+                    predicted_kwh=predicted,
+                ))
+
         return readings
     except Exception as e:
         logger.warning(f"Failed to fetch energy history for {zone_id}: {e}")

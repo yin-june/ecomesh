@@ -53,7 +53,11 @@ db = SessionLocal()
 def upsert_user(email, full_name, password, esg_points=0):
     user = db.query(models.User).filter(models.User.email == email).first()
     if user:
-        logger.info("  skip user %s (exists)", email)
+        if user.esg_points != esg_points:
+            user.esg_points = esg_points
+            logger.info("  updated esg_points=%d for %s", esg_points, email)
+        else:
+            logger.info("  skip user %s (exists)", email)
         return user
     user = models.User(
         email=email,
