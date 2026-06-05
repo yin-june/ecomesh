@@ -60,6 +60,29 @@ class AuthService {
     return _asMap(response, 'getCurrentUser');
   }
 
+  /// Get the current user's saved energy profile (preset + temp).
+  /// Throws [NotFoundException] if no profile has been saved yet.
+  Future<Map<String, dynamic>> getEnergyProfile() async {
+    final response = await apiClient.get('/api/v1/auth/energy-profile');
+    return _asMap(response, 'getEnergyProfile');
+  }
+
+  /// Create or update the current user's energy profile on the backend.
+  /// The desk-claim endpoint reads this to auto-apply AC settings.
+  Future<Map<String, dynamic>> upsertEnergyProfile({
+    required String profileName,
+    required double preferredTemp,
+  }) async {
+    final response = await apiClient.put(
+      '/api/v1/auth/energy-profile',
+      body: {
+        'profile_name': profileName,
+        'preferred_temp': preferredTemp,
+      },
+    );
+    return _asMap(response, 'upsertEnergyProfile');
+  }
+
   /// Logout user
   Future<void> logout() async {
     await apiClient.clearToken();

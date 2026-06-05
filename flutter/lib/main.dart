@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'screens/navigation.dart';
+import 'screens/splash_screen.dart';
 import 'services/app_state.dart';
 
 void main() {
@@ -28,18 +28,18 @@ class EcoMeshApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           fontFamily: 'Nunito',
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF4DB8FF),
-            brightness: Brightness.light,
-          ).copyWith(
-            primary: const Color(0xFF2BA3EC),
-            secondary: const Color(0xFF00D4AA),
-            surface: Colors.white,
-            background: const Color(0xFFF0F8FF),
-          ),
+          colorScheme:
+              ColorScheme.fromSeed(
+                seedColor: const Color(0xFF4DB8FF),
+                brightness: Brightness.light,
+              ).copyWith(
+                primary: const Color(0xFF2BA3EC),
+                secondary: const Color(0xFF00D4AA),
+                surface: Colors.white,
+              ),
           scaffoldBackgroundColor: Colors.white,
         ),
-        home: const Navigation(),
+        home: const SplashScreen(),
       ),
     );
   }

@@ -1,6 +1,82 @@
 # EcoMesh: Smart Energy Management System
+*A Low-Cost, Universal Gateway for Personalized Energy Environments*
 
-EcoMesh is an intelligent, decentralized energy management framework combining Edge-AI, a hybrid-wireless ESP-NOW mesh, and a FastAPI backend to eliminate "Ghost Power" waste in commercial and academic buildings.
+**Pitch Deck**: https://canva.link/cqd7eo5j1rgzzz7 
+
+## Abstract / Executive Summary
+EcoMesh is a decentralized energy management prototype designed to tackle electricity waste in existing residential and commercial spaces. Moving beyond static schedules, EcoMesh utilizes low-cost Edge-processing, high-fidelity mmWave sensing (HLK-LD2410B), and Universal IR/RF mimicry to create an adaptive energy environment. By detecting micro-vibrations (like human breathing) locally on ESP32 hubs, the system autonomously cuts standby "ghost power" via smart relays and manages legacy HVAC systems without expensive retrofits. Paired with an intuitive Flutter application for real-time ESG impact tracking and dynamic zone control, EcoMesh delivers a highly viable solution to smart energy management.
+
+## Problem Statement
+Massive amounts of electricity are wasted daily due to inefficient energy usage practices:
+- **Behavioral Neglect**: Lights, air-conditioning, and appliances are frequently left running in empty rooms. Standard motion sensors fail to detect stationary users, creating "environmental friction" that leads users to disable automation.
+- **Standby Waste**: "Ghost power" is continuously drawn by idle devices like monitors and chargers.
+- **Inflexible Infrastructure**: Centralized HVAC and lighting systems lack the granular intelligence to adapt to micro-occupancy. True smart homes are cost-prohibitive and require extensive wiring modifications, making them impractical for the majority of renters and legacy office spaces.
+
+## Solution Overview & System Architecture
+EcoMesh introduces a paradigm shift by reframing buildings from passive structures into dynamic energy ecosystems that autonomously adapt to human presence.
+
+```mermaid
+flowchart TD
+    %% Styling
+    classDef frontend fill:#02569B,stroke:#0175C2,stroke-width:2px,color:white;
+    classDef backend fill:#009688,stroke:#00796B,stroke-width:2px,color:white;
+    classDef firmware fill:#E65100,stroke:#F57C00,stroke-width:2px,color:white;
+    classDef db fill:#455A64,stroke:#37474F,stroke-width:2px,color:white;
+    
+    subgraph Frontend["📱 Flutter App (UX & Orchestration)"]
+        UI[Mobile Dashboard & Profiles]:::frontend
+    end
+
+    subgraph Backend["🧠 Backend (FastAPI, AI & Data)"]
+        API[FastAPI Server]:::backend
+        ML[Predictive ML Engine]:::backend
+        Broker[MQTT Broker]:::backend
+        PG[(PostgreSQL)]:::db
+        TSDB[(InfluxDB)]:::db
+        
+        API <--> Broker
+        API <--> PG
+        API <--> TSDB
+        ML --> API
+    end
+
+    subgraph Firmware["🔌 Firmware & Hardware (ESP32 Edge)"]
+        Hub[ESP32 Gateway Hub]:::firmware
+        Node[ESP32 Sensory Nodes]:::firmware
+        Relay[4-Channel Smart Relay]
+        IR[IR/RF Transceiver]
+        Sensor[mmWave Radar & PZEM-004T]
+        
+        Node -- "ESP-NOW Mesh" --> Hub
+        Sensor --> Node
+        Hub --> Relay
+        Hub --> IR
+    end
+
+    %% Cross-layer communication
+    UI -- "REST API / WebSockets" --> API
+    Hub -- "MQTTS Telemetry & Commands" <--> Broker
+```
+
+- **Hardware & Perception Layer (The "Nerves")**: Utilizes low-cost HLK-LD2410B mmWave Radar and ESP32-C3 nodes to detect micro-vibrations at the edge, ensuring accurate occupancy detection even when users are completely still (passing the "Breathing Test"). Ground-truth energy monitoring is captured via PZEM-004T.
+- **Control & Execution Layer (The "Muscle")**: Universal retrofitting through an integrated IR/RF transceiver that clones legacy remote commands. A 4-Channel Relay physically cuts circuits to idle devices when a room is vacated, killing "ghost power".
+- **Data & AI Layer (The "Brain")**: Local edge AI processing guarantees privacy (raw signals never leave the room). Dual deployment models (Cloud or On-Premises) support scalable, predictive demand routing and simulated HVAC predictive analytics.
+- **User Experience (The "Experience")**: A minimal Flutter app allows users to create "Energy Personas" (e.g., Deep Worker) and "claim" physical zones, automatically syncing environmental preferences via "Follow-Me" Profiles.
+
+## Key Features & Innovation
+- **"Follow-Me" Energy Paradigm**: Hands control back to the user through dynamic profiles that follow them across physical zones, replacing rigid building schedules.
+- **Edge-Triggered "Ghost Power Hunter"**: Doesn't just turn off lights; it physically severs power to standby electronics when micro-occupancy drops.
+- **Zero-Barrier Retrofitting**: Hyper-affordable sub-RM100 master hubs clone existing IR remote signals, allowing deployment in aging facilities without rewiring.
+- **Privacy-First Edge Processing**: Raw sensor data is destroyed locally. Only anonymized binary states are transmitted securely via MQTTS encryption.
+
+## Tech Stack
+- **Hardware**: ESP32-S3 (Gateway Hub), ESP32-C3 (Sensory Nodes), HLK-LD2410B mmWave Radar, 4-Channel Relay, PZEM-004T, IR/RF Transceiver
+- **Firmware**: C++ (PlatformIO / ESP-IDF)
+- **Backend API**: FastAPI (Python), SQLAlchemy
+- **Databases**: PostgreSQL (Relational Data), InfluxDB (Time-Series Telemetry)
+- **Frontend App**: Flutter (Dart)
+- **Machine Learning**: Scikit-Learn / Pandas (HVAC Predictive Modeling)
+- **IoT Messaging**: MQTT (over TLS/SSL)
 
 ---
 
