@@ -580,7 +580,7 @@ class _ZonesScreenState extends State<ZonesScreen>
       builder: (_) => _DeskSheet(
         desk: desk,
         zone: zone,
-        currentUserId: context.read<AppState>().currentUser?['id'] as int?,
+        currentUserId: context.read<AppState>().currentUser?.id,
         onUpdate: () => _loadZoneDetails(zone.id),
       ),
     );

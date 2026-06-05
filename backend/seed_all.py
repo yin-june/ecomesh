@@ -18,6 +18,8 @@ Re-running is safe – it skips records that already exist.
 import os
 import sys
 import logging
+import uuid
+import datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -70,6 +72,53 @@ def upsert_user(email, full_name, password, esg_points=0):
     db.flush()  # get id without commit
     logger.info("  + user %s (id=%s)", email, user.id)
     return user
+
+
+def seed_notifications(user):
+    """Seed real notifications for the user."""
+    # check if user has notifications
+    existing = db.query(models.Notification).filter(models.Notification.user_id == user.id).first()
+    if existing:
+        logger.info("  skip seeding notifications (already exist)")
+        return
+        
+    now = datetime.datetime.utcnow()
+    
+    notifs = [
+        models.Notification(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            title="Welcome back!",
+            body="EcoMesh is optimizing Zone B for your arrival.",
+            type="arrival",
+            timestamp=(now - datetime.timedelta(minutes=5)).isoformat() + "Z",
+            is_read=False
+        ),
+        models.Notification(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            title="Ghost Power Detected",
+            body="Zone A has 3 unclaimed sockets drawing 42W.",
+            type="warning",
+            timestamp=(now - datetime.timedelta(hours=2)).isoformat() + "Z",
+            is_read=False
+        ),
+        models.Notification(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            title="Daily Summary",
+            body="You saved RM 1.20 yesterday!",
+            type="saving",
+            timestamp=(now - datetime.timedelta(days=1)).isoformat() + "Z",
+            is_read=True
+        )
+    ]
+    
+    for n in notifs:
+        db.add(n)
+        
+    db.commit()
+    logger.info(f"  seeded {len(notifs)} notifications")
 
 
 def upsert_zone(zone_id, name, floor_level, base_ac_target=24.0):
@@ -162,6 +211,8 @@ try:
         password="password123",
         esg_points=87,  # ~8.7 kWh saved → shows meaningful impact on screen
     )
+    seed_notifications(main_user)
+    
     user_siti = upsert_user(
         email="siti@example.com",
         full_name="Siti Noor",

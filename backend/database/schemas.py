@@ -86,3 +86,15 @@ class EnergyProfileResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# --- NOTIFICATION SCHEMAS ---
+class NotificationResponse(BaseModel):
+    id: str
+    title: str
+    body: str
+    type: str
+    timestamp: str
+    is_read: bool
+
+    class Config:
+        from_attributes = True

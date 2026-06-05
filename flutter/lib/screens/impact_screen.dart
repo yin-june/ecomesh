@@ -195,7 +195,7 @@ class _ImpactScreenState extends State<ImpactScreen>
 
       // ── Step 3: If no InfluxDB data, fall back to esg_points estimate ───
       if (totalKwhSaved == 0.0) {
-        final esgPoints = user?['esg_points'] as int? ?? 0;
+        final esgPoints = user?.esgPoints ?? 0;
         totalKwhSaved = _esgPointsToKwh(esgPoints);
       }
 
