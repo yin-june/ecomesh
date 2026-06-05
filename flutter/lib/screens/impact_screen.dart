@@ -864,7 +864,7 @@ class _ImpactScreenState extends State<ImpactScreen>
   Widget _buildMiniChart() {
     if (_energyHistory.isEmpty) {
       return Container(
-        height: 80,
+        height: 120,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppTheme.iceBlue,
@@ -877,7 +877,7 @@ class _ImpactScreenState extends State<ImpactScreen>
       );
     }
     return SizedBox(
-      height: 80,
+      height: 120,
       child: CustomPaint(
         painter: _MiniChartPainter(readings: _energyHistory),
         size: Size.infinite,
@@ -966,13 +966,78 @@ class _MiniChartPainter extends CustomPainter {
   final List<EnergyReading> readings;
   const _MiniChartPainter({required this.readings});
 
+  String _getWeekdayName(int weekday) {
+    switch (weekday) {
+      case 1:
+        return 'Mon';
+      case 2:
+        return 'Tue';
+      case 3:
+        return 'Wed';
+      case 4:
+        return 'Thu';
+      case 5:
+        return 'Fri';
+      case 6:
+        return 'Sat';
+      case 7:
+        return 'Sun';
+      default:
+        return '';
+    }
+  }
+
+  String _formatYLabel(double val) {
+    if (val == 0) return '0';
+    if (val >= 10) {
+      return '${val.toInt()}';
+    } else {
+      return val.toStringAsFixed(1);
+    }
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (readings.isEmpty) return;
-    final maxVal =
-        readings.fold(0.0, (m, r) => r.actual > m ? r.actual : m);
+    final maxVal = readings.fold(0.0, (m, r) {
+      final localMax = r.actual > r.predicted ? r.actual : r.predicted;
+      return localMax > m ? localMax : m;
+    });
     if (maxVal == 0) return;
 
+    // Define Margins for Axes
+    const leftMargin = 45.0;
+    const rightMargin = 10.0;
+    const topMargin = 25.0;
+    const bottomMargin = 20.0;
+
+    final chartLeft = leftMargin;
+    final chartRight = size.width - rightMargin;
+    final chartTop = topMargin;
+    final chartBottom = size.height - bottomMargin;
+    final chartWidth = chartRight - chartLeft;
+    final chartHeight = chartBottom - chartTop;
+
+    if (chartWidth <= 0 || chartHeight <= 0) return;
+
+    // Draw Grid Lines / Axes
+    final axisPaint = Paint()
+      ..color = AppTheme.divider
+      ..strokeWidth = 1.0;
+
+    // Horizontal grid lines (Top, Middle, Bottom)
+    canvas.drawLine(Offset(chartLeft, chartTop), Offset(chartRight, chartTop), axisPaint);
+    canvas.drawLine(
+      Offset(chartLeft, chartTop + chartHeight / 2),
+      Offset(chartRight, chartTop + chartHeight / 2),
+      axisPaint,
+    );
+    canvas.drawLine(Offset(chartLeft, chartBottom), Offset(chartRight, chartBottom), axisPaint);
+
+    // Left Y-axis line
+    canvas.drawLine(Offset(chartLeft, chartTop), Offset(chartLeft, chartBottom), axisPaint);
+
+    // Draw Paths (Actual and Predicted)
     final actualPaint = Paint()
       ..color = AppTheme.skyBlue
       ..strokeWidth = 2.5
@@ -990,15 +1055,15 @@ class _MiniChartPainter extends CustomPainter {
     final actualPath = Path();
     final predictPath = Path();
 
+    final denom = readings.length > 1 ? readings.length - 1 : 1;
+
     for (int i = 0; i < readings.length; i++) {
-      final x = i / (readings.length - 1) * size.width;
-      final ay = size.height -
-          (readings[i].actual / maxVal) * size.height * 0.85;
-      final py = size.height -
-          (readings[i].predicted / maxVal) * size.height * 0.85;
+      final x = chartLeft + (i / denom) * chartWidth;
+      final ay = chartBottom - (readings[i].actual / maxVal) * chartHeight;
+      final py = chartBottom - (readings[i].predicted / maxVal) * chartHeight;
 
       if (i == 0) {
-        fillPath.moveTo(x, size.height);
+        fillPath.moveTo(x, chartBottom);
         fillPath.lineTo(x, ay);
         actualPath.moveTo(x, ay);
         predictPath.moveTo(x, py);
@@ -1008,7 +1073,7 @@ class _MiniChartPainter extends CustomPainter {
         predictPath.lineTo(x, py);
       }
     }
-    fillPath.lineTo(size.width, size.height);
+    fillPath.lineTo(chartLeft + ((readings.length - 1) / denom) * chartWidth, chartBottom);
     fillPath.close();
 
     final fillPaint = Paint()
@@ -1019,7 +1084,7 @@ class _MiniChartPainter extends CustomPainter {
           AppTheme.skyBlue.withOpacity(0.2),
           AppTheme.skyBlue.withOpacity(0.02),
         ],
-      ).createShader(Offset.zero & size);
+      ).createShader(Offset(chartLeft, chartTop) & Size(chartWidth, chartHeight));
     canvas.drawPath(fillPath, fillPaint);
     canvas.drawPath(actualPath, actualPaint);
     canvas.drawPath(predictPath, predictPaint);
@@ -1036,7 +1101,7 @@ class _MiniChartPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    tp1.paint(canvas, const Offset(4, 4));
+    tp1.paint(canvas, Offset(chartLeft, 4));
 
     final tp2 = TextPainter(
       text: const TextSpan(
@@ -1049,7 +1114,80 @@ class _MiniChartPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    tp2.paint(canvas, Offset(4 + tp1.width + 12, 4));
+    tp2.paint(canvas, Offset(chartLeft + tp1.width + 12, 4));
+
+    // Y-Axis Labels
+    final yLabels = [
+      '${_formatYLabel(maxVal)} kWh',
+      _formatYLabel(maxVal / 2),
+      '0',
+    ];
+    final yPositions = [
+      chartTop,
+      chartTop + chartHeight / 2,
+      chartBottom,
+    ];
+
+    for (int i = 0; i < yLabels.length; i++) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: yLabels[i],
+          style: const TextStyle(
+            fontFamily: 'Nunito',
+            fontSize: 9,
+            color: AppTheme.textLight,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(
+        canvas,
+        Offset(
+          chartLeft - tp.width - 6,
+          yPositions[i] - tp.height / 2,
+        ),
+      );
+    }
+
+    // X-Axis Labels (Weekdays)
+    final List<int> seenWeekdays = [];
+    final Map<int, List<double>> weekdayXCoords = {};
+    for (int i = 0; i < readings.length; i++) {
+      final wd = readings[i].time.weekday;
+      if (!weekdayXCoords.containsKey(wd)) {
+        seenWeekdays.add(wd);
+        weekdayXCoords[wd] = [];
+      }
+      final x = chartLeft + (i / denom) * chartWidth;
+      weekdayXCoords[wd]!.add(x);
+    }
+
+    for (final wd in seenWeekdays) {
+      final coords = weekdayXCoords[wd]!;
+      final centerX = coords.reduce((a, b) => a + b) / coords.length;
+
+      final tp = TextPainter(
+        text: TextSpan(
+          text: _getWeekdayName(wd),
+          style: const TextStyle(
+            fontFamily: 'Nunito',
+            fontSize: 9,
+            color: AppTheme.textLight,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      tp.paint(
+        canvas,
+        Offset(
+          centerX - tp.width / 2,
+          chartBottom + 6,
+        ),
+      );
+    }
   }
 
   @override

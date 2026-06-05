@@ -70,7 +70,7 @@ def get_zone_energy_history(zone_id: str, days: int = 7):
           |> range(start: -{days}d)
           |> filter(fn: (r) => r._measurement == "zone_telemetry")
           |> filter(fn: (r) => r.zone_id == "{zone_id}")
-          |> filter(fn: (r) => r._field == "energy_draw_kwh")
+          |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
           |> sort(columns: ["_time"])
         """
 
@@ -88,19 +88,20 @@ def get_zone_energy_history(zone_id: str, days: int = 7):
             if frame is None or frame.empty:
                 continue
             for _, row in frame.iterrows():
-                actual = float(row['_value'])
-
-                # Use ML model to get a predicted value for this time context
+                # Extract pivoted fields
+                actual = float(row.get('energy_draw_kwh', 0.0))
+                
                 predicted = 0.0
                 if model_available:
                     try:
                         import pandas as pd
                         ts = row['_time']
-                        # Estimate occupancy from energy draw (inverse of seeder formula)
-                        estimated_occupancy = max(0, int((actual - 0.8) / 0.18))
+                        occupancy = int(row.get('occupancy_count', 0))
+                        outdoor_temp = float(row.get('outdoor_temp', 30.0))
+                        
                         feature_row = pd.DataFrame([{
-                            'occupancy_count': estimated_occupancy,
-                            'outdoor_temp': 30.0,  # conservative KL estimate
+                            'occupancy_count': occupancy,
+                            'outdoor_temp': outdoor_temp,
                             'hour': ts.hour,
                             'day_of_week': ts.weekday(),
                             'is_weekend': int(ts.weekday() >= 5)
