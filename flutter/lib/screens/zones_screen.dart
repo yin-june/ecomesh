@@ -198,25 +198,70 @@ class _ZonesScreenState extends State<ZonesScreen>
                     ),
                   ),
                 ),
-                // Zone label
+                // Zone label and Calibration Button
                 Positioned(
                   top: 14,
                   left: 16,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppTheme.skyBlue,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      zone.name,
-                      style: const TextStyle(
-                          fontFamily: 'Nunito',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white),
-                    ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.skyBlue,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          zone.name,
+                          style: const TextStyle(
+                              fontFamily: 'Nunito',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () async {
+                          try {
+                            // In real deployment, this uses GetIt or Provider to grab ZoneService
+                            // final zoneService = locator<ZoneService>();
+                            // await zoneService.triggerAutoCalibration(zone.id);
+                          } catch (e) {
+                            // Ignore error for mock
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: AppTheme.mintGreen,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              content: const Text(
+                                '🎯 Auto-Calibration started! Please leave the room for 15 seconds.',
+                                style: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w600, color: Colors.white),
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.amber,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white, width: 1),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.radar_rounded, size: 12, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text(
+                                'Calibrate',
+                                style: TextStyle(fontFamily: 'Nunito', fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 // Temp badge

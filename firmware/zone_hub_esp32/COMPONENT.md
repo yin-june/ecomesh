@@ -50,9 +50,9 @@ HLK-PM01 (5V)
 RM 19.90
 Buy HLK-PM01
 Relay Module
-4-Channel 5V Relay
+4-Channel 5V Relay (Active H/L) or SSR
 RM 14.00
-Buy 4-Ch Relay
+Buy 4-Ch Relay (Must set jumpers to 'H' / High-Level Trigger. Use SSR for laptop chargers)
 IR Kit
 Transmitter + Receiver
 RM 5.14
@@ -130,8 +130,8 @@ AC-DC Converter
 HLK-PM01 5V
 Converts 240V to 5V inside your strip to power the ESP32.
 Relay Module
-4-Channel 5V Relay
-The "Muscle" that clicks the power on/off.
+4-Channel 5V Relay (Active H/L)
+The "Muscle" that clicks the power on/off. Must set jumpers to 'H'. Note: Laptop chargers require SSR or NTC Thermistor due to inrush current.
 IR/RF Combo
 IR & 433MHz RF Kit
 To control the legacy Air-Conds and Fans.

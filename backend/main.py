@@ -22,6 +22,13 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Initializing EcoMesh AI & Hardware Bridges...")
     
+    # Create database tables if they don't exist
+    from database.base import Base
+    from config.database import engine
+    import database.models  # Ensure all models are imported so Base knows about them
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables verified/created.")
+    
     # Connect to MQTT Broker to listen/send commands to ESP32 Gateways
     mqtt_bridge.connect()
     

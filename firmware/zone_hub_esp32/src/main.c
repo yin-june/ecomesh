@@ -38,9 +38,14 @@ static char gateway_mac_str[18] = {0};
 static char telemetry_topic[64] = {0};
 static char command_topic[64] = {0};
 
+typedef struct command_message {
+    uint8_t command_type; // 1 = CALIBRATE
+} command_message;
+
 // Variables for IR Learning
-static rmt_symbol_word_t learned_ir_symbols[256];
+static rmt_symbol_word_t learned_ir_symbols[1024];
 static size_t learned_ir_count = 0;
+static bool is_learning_mode = false;
 // Test timing definitions for RMT IR (NEC protocol-like)
 static const rmt_symbol_word_t TEST_IR_SYMBOLS[] = {
     { .duration0 = 9000, .level0 = 1, .duration1 = 4500, .level1 = 0 }, // Leader code
@@ -52,6 +57,14 @@ static const rmt_symbol_word_t TEST_IR_SYMBOLS[] = {
     { .duration0 =  560, .level0 = 1, .duration1 =  560, .level1 = 0 }  // Stop bit
 };
 #define TEST_IR_COUNT (sizeof(TEST_IR_SYMBOLS) / sizeof(TEST_IR_SYMBOLS[0]))
+
+// Non-blocking timer task for MQTT learning mode
+void ir_learning_timeout_task(void *pvParameters) {
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    is_learning_mode = false;
+    ESP_LOGI(TAG, ">> 🛑 MQTT LEARNING MODE CLOSED! Successfully recorded %d total symbols.", learned_ir_count);
+    vTaskDelete(NULL);
+}
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
     esp_mqtt_event_handle_t event = event_data;
@@ -79,6 +92,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                                 ir_ctrl_send_raw(TEST_IR_SYMBOLS, TEST_IR_COUNT);
                             }
                         }
+                    } else if (device && device->valuestring && strcmp(device->valuestring, "IR_LEARN") == 0) {
+                        is_learning_mode = true;
+                        learned_ir_count = 0;
+                        ESP_LOGI(TAG, ">> 🔴 MQTT Triggered IR LEARNING MODE ACTIVE (3 seconds)...");
+                        xTaskCreate(ir_learning_timeout_task, "ir_learn_timer", 2048, NULL, 5, NULL);
                     } else if (device && device->valuestring && strcmp(device->valuestring, "RELAY") == 0) {
                         cJSON *state = cJSON_GetObjectItem(root, "state");
                         if (state) {
@@ -86,6 +104,17 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                             relay_ctrl_set(0, is_on);
                             ESP_LOGI(TAG, "MQTT Command: Relay set to %s", is_on ? "ON" : "OFF");
                         }
+                    } else if (device && device->valuestring && strcmp(device->valuestring, "CALIBRATE_NODE") == 0) {
+                        ESP_LOGI(TAG, ">> Start Calibration Triggered! Broadcasting to nodes...");
+                        command_message cmd;
+                        cmd.command_type = 1;
+                        uint8_t broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+                        esp_now_peer_info_t peerInfo = {0};
+                        memcpy(peerInfo.peer_addr, broadcast_mac, 6);
+                        if (!esp_now_is_peer_exist(broadcast_mac)) {
+                            esp_now_add_peer(&peerInfo);
+                        }
+                        esp_now_send(broadcast_mac, (uint8_t *)&cmd, sizeof(cmd));
                     }
                     cJSON_Delete(root);
                 }
@@ -154,15 +183,32 @@ static void on_data_recv(const uint8_t *mac_addr, const uint8_t *data, int len) 
         ESP_LOGI(TAG, "Target Station Distance: %d cm", incomingTelemetry.stationary_distance);
         ESP_LOGI(TAG, "Sensor Energy Level: %d", incomingTelemetry.energy_level);
 
-        if (incomingTelemetry.presence_detected) {
-            ESP_LOGI(TAG, "Action -> Energizing Zone Actuators.");
-            relay_ctrl_set(0, true); // Turn socket relay ON
+        bool current_presence = incomingTelemetry.presence_detected;
+
+        // 1. Constantly enforce Relay state
+        if (current_presence) {
+            relay_ctrl_set(0, true); // Turn socket relay ON (Channel 0 -> GPIO 33)
         } else {
-            ESP_LOGI(TAG, "Action -> Zone Empty. Activating Vampire Shutdown sequence.");
             relay_ctrl_set(0, false); // Cut off "Ghost/Standby Power"
+        }
+
+        // 2. Fire IR commands ONLY on state transitions
+        static bool last_presence_state = false;
+        if (current_presence && !last_presence_state) {
+            ESP_LOGI(TAG, "Action -> Room Occupied (Rising Edge).");
+            if (learned_ir_count > 0) {
+                ESP_LOGI(TAG, "Transmitting learned IR sequence to power ON AC...");
+                ir_ctrl_send_raw(learned_ir_symbols, learned_ir_count);
+            } else {
+                ESP_LOGW(TAG, "No IR sequence learned yet. Send test sequence.");
+                ir_ctrl_send_raw(TEST_IR_SYMBOLS, TEST_IR_COUNT);
+            }
+        } else if (!current_presence && last_presence_state) {
+            ESP_LOGI(TAG, "Action -> Zone Empty. Activating Vampire Shutdown sequence.");
             send_ac_off_signal();
             ESP_LOGI(TAG, "Legacy AC Off command deployed via IR.");
         }
+        last_presence_state = current_presence;
 
         // Publish to MQTT
         if (mqtt_client) {
@@ -189,32 +235,44 @@ static const uint32_t TEST_RF_PULSES[] = {
 void ir_receiver_task(void *pvParameters) {
     ESP_LOGI(TAG, "IR receiver task started.");
     
-    // Allocate buffer for incoming RMT symbols
-    #define MAX_IR_SYMBOLS 256
-    rmt_symbol_word_t rx_buffer[MAX_IR_SYMBOLS];
+    // Allocate buffer for incoming RMT symbols on the heap to avoid stack overflow
+    #define MAX_IR_SYMBOLS 1024
+    rmt_symbol_word_t *rx_buffer = (rmt_symbol_word_t *)malloc(sizeof(rmt_symbol_word_t) * MAX_IR_SYMBOLS);
+    if (!rx_buffer) {
+        ESP_LOGE(TAG, "Failed to allocate memory for IR rx_buffer!");
+        vTaskDelete(NULL);
+    }
     size_t received_count = 0;
 
     while (1) {
         // Try to receive a raw IR sequence (wait indefinitely)
         esp_err_t err = ir_ctrl_receive_raw(rx_buffer, MAX_IR_SYMBOLS, &received_count, portMAX_DELAY);
         if (err == ESP_OK && received_count > 0) {
-            ESP_LOGI(TAG, "📥 IR SIGNAL CAPTURED! Received %d symbols:", received_count);
-            
-            // Save to learning buffer
-            memcpy(learned_ir_symbols, rx_buffer, sizeof(rmt_symbol_word_t) * received_count);
-            learned_ir_count = received_count;
-            ESP_LOGI(TAG, "IR sequence learned and stored in memory!");
-            for (size_t i = 0; i < received_count && i < 10; i++) {
-                printf("  [%d] Dur0: %4d us (Lvl: %d), Dur1: %4d us (Lvl: %d)\n", i, 
-                       (int)rx_buffer[i].duration0, (int)rx_buffer[i].level0,
-                       (int)rx_buffer[i].duration1, (int)rx_buffer[i].level1);
+            if (is_learning_mode) {
+                // Append the newly captured frame to our learning buffer
+                if (learned_ir_count + received_count + 1 <= MAX_IR_SYMBOLS) {
+                    
+                    // If we already have symbols (meaning this is Frame 2+), insert a 10ms gap symbol 
+                    // to simulate the precise time delay between Panasonic frames so the AC doesn't reject it!
+                    if (learned_ir_count > 0) {
+                        learned_ir_symbols[learned_ir_count].duration0 = 5000;
+                        learned_ir_symbols[learned_ir_count].level0 = 0;
+                        learned_ir_symbols[learned_ir_count].duration1 = 5000;
+                        learned_ir_symbols[learned_ir_count].level1 = 0;
+                        learned_ir_count++;
+                    }
+
+                    memcpy(&learned_ir_symbols[learned_ir_count], rx_buffer, sizeof(rmt_symbol_word_t) * received_count);
+                    learned_ir_count += received_count;
+                    ESP_LOGI(TAG, "📥 Captured Frame part! Total symbols accumulated: %d", learned_ir_count);
+                } else {
+                    ESP_LOGW(TAG, "Learning buffer full! Cannot append frame.");
+                }
+            } else {
+                ESP_LOGI(TAG, "📥 IR SIGNAL CAPTURED! Received %d symbols. (Ignored. Press 'r' to record)", received_count);
             }
-            if (received_count > 10) {
-                printf("  ... (%d more symbols)\n", received_count - 10);
-            }
-            printf("\n");
         }
-        // No vTaskDelay needed if we wait portMAX_DELAY, but keep a tiny yield just in case
+        // Yield to let other tasks run
         vTaskDelay(pdMS_TO_TICKS(1)); 
     }
 }
@@ -286,6 +344,8 @@ void console_input_task(void *pvParameters) {
     printf("  [3] Toggle Relay Channel 2 (GPIO 26)\n");
     printf("  [4] Toggle Relay Channel 3 (GPIO 27)\n");
     printf("  [i] Transmit Test IR Pulse Sequence (GPIO 12)\n");
+    printf("  [r] Record Custom IR Sequence (Learning Mode)\n");
+    printf("  [l] Transmit Custom Learned IR Sequence (AC ON)\n");
     printf("  [t] Trigger 2-second Static IR TX Test (Verify LED)\n");
     printf("  [f] Transmit Test RF Pulse Train (GPIO 23)\n");
     printf("  [h] Reprint this Menu\n");
@@ -330,6 +390,28 @@ void console_input_task(void *pvParameters) {
                     printf(">> Firing test IR raw sequence...\n");
                     ir_ctrl_send_raw(TEST_IR_SYMBOLS, TEST_IR_COUNT);
                     break;
+                case 'r':
+                case 'R':
+                    is_learning_mode = true;
+                    learned_ir_count = 0; // Clear the memory
+                    printf("\n>> 🔴 IR LEARNING MODE ACTIVE (You have 3 seconds)...\n");
+                    printf(">> Point your AC remote at the Hub and press the ON button...\n\n");
+                    
+                    // Keep the window open for 3 seconds to catch all fragmented AC frames
+                    vTaskDelay(pdMS_TO_TICKS(3000));
+                    
+                    is_learning_mode = false;
+                    printf(">> 🛑 LEARNING MODE CLOSED! Successfully recorded %d total symbols.\n", learned_ir_count);
+                    break;
+                case 'l':
+                case 'L':
+                    if (learned_ir_count > 0) {
+                        printf(">> Firing CUSTOM recorded IR sequence...\n");
+                        ir_ctrl_send_raw(learned_ir_symbols, learned_ir_count);
+                    } else {
+                        printf(">> Error: No custom IR command recorded yet! Use the app to learn one first.\n");
+                    }
+                    break;
                 case 't':
                 case 'T':
                     printf(">> Static test: Pulling IR TX (GPIO 12) HIGH for 2 seconds...\n");
@@ -354,6 +436,8 @@ void console_input_task(void *pvParameters) {
                     printf("  [3] Toggle Relay Channel 2 (GPIO 26)\n");
                     printf("  [4] Toggle Relay Channel 3 (GPIO 27)\n");
                     printf("  [i] Transmit Test IR Pulse Sequence (GPIO 12)\n");
+                    printf("  [r] Record Custom IR Sequence (Learning Mode)\n");
+                    printf("  [l] Transmit Custom Learned IR Sequence (AC ON)\n");
                     printf("  [t] Trigger 2-second Static IR TX Test (Verify LED)\n");
                     printf("  [f] Transmit Test RF Pulse Train (GPIO 23)\n");
                     printf("  [h] Reprint this Menu\n");

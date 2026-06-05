@@ -129,4 +129,24 @@ class ZoneService {
     );
     return _asMap(response, 'emergencyShutdown');
   }
+
+  /// Trigger auto-calibration for mmWave sensors in a zone
+  Future<Map<String, dynamic>> triggerAutoCalibration(String zoneId) async {
+    final response = await apiClient.post(
+      '/api/v1/control/$zoneId/calibrate',
+      body: {},
+    );
+    return _asMap(response, 'triggerAutoCalibration');
+  }
+
+  /// Trigger IR Learning mode on the hub
+  Future<Map<String, dynamic>> triggerIRLearning(String zoneId) async {
+    final response = await apiClient.post(
+      '/api/v1/control/$zoneId/ir-learn',
+      body: {},
+    ).timeout(const Duration(seconds: 10), onTimeout: () {
+      throw ServerException("Connection to backend timed out. Is the server running?");
+    });
+    return _asMap(response, 'triggerIRLearning');
+  }
 }

@@ -87,3 +87,38 @@ def trigger_dead_mans_switch(
         "status": "success", 
         "message": f"Floor {floor_level} shutdown complete. {count} active zones disabled."
     }
+
+@router.post("/{zone_id}/calibrate")
+def calibrate_node(
+    zone_id: str,
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Trigger the auto-calibration mode on the mmWave sensor nodes.
+    The Hub will receive this and broadcast an ESP-NOW command to the nodes.
+    """
+    topic = f"ecomesh/zones/{zone_id}/command"
+    payload = json.dumps({"device": "CALIBRATE_NODE", "triggered_by": current_user.email})
+    
+    # Dispatch via MQTT to the ESP32 Gateway
+    mqtt_bridge.client.publish(topic, payload)
+    logger.info(f"User {current_user.id} triggered node calibration in {zone_id}")
+    
+    return {"status": "success", "message": f"Auto-calibration triggered for nodes in {zone_id}"}
+
+
+@router.post("/{zone_id}/ir-learn")
+def trigger_ir_learning(
+    zone_id: str,
+):
+    """
+    Trigger the IR learning mode on the ESP32 Hub.
+    """
+    topic = f"ecomesh/zones/{zone_id}/command"
+    payload = json.dumps({"device": "IR_LEARN"})
+    
+    # Dispatch via MQTT to the ESP32 Gateway
+    mqtt_bridge.client.publish(topic, payload)
+    logger.info(f"IR learning mode triggered for {zone_id}")
+    
+    return {"status": "success", "message": f"IR Learning mode activated for 3 seconds on hub in {zone_id}"}
