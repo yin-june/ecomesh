@@ -435,7 +435,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: const EdgeInsets.only(bottom: 12),
             child: ZoneStatusCard(
               zoneIndex: index,
-              zoneName: zone['name'] ?? 'Zone ${index + 1}',
+              zoneData: zone,
+              zoneName: zone['name'] as String?,
             ),
           );
         }),
