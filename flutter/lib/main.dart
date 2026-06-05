@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'screens/navigation.dart';
+import 'screens/splash_screen.dart';
 import 'services/app_state.dart';
 
 void main() {
@@ -21,7 +21,7 @@ class EcoMeshApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => AppState(apiBaseUrl: 'http://192.168.0.154:8000'), // Update with your backend URL
+      create: (_) => AppState(apiBaseUrl: 'http://192.168.8.2:8000'),
       child: MaterialApp(
         title: 'EcoMesh',
         debugShowCheckedModeBanner: false,
@@ -35,11 +35,10 @@ class EcoMeshApp extends StatelessWidget {
             primary: const Color(0xFF2BA3EC),
             secondary: const Color(0xFF00D4AA),
             surface: Colors.white,
-            background: const Color(0xFFF0F8FF),
           ),
           scaffoldBackgroundColor: Colors.white,
         ),
-        home: const Navigation(),
+        home: const SplashScreen(),
       ),
     );
   }
