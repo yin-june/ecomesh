@@ -1,6 +1,8 @@
 # EcoMesh: Smart Energy Management System
 *A Low-Cost, Universal Gateway for Personalized Energy Environments*
 
+**Pitch Deck**: https://canva.link/cqd7eo5j1rgzzz7 
+
 ## Abstract / Executive Summary
 EcoMesh is a decentralized energy management prototype designed to tackle electricity waste in existing residential and commercial spaces. Moving beyond static schedules, EcoMesh utilizes low-cost Edge-processing, high-fidelity mmWave sensing (HLK-LD2410B), and Universal IR/RF mimicry to create an adaptive energy environment. By detecting micro-vibrations (like human breathing) locally on ESP32 hubs, the system autonomously cuts standby "ghost power" via smart relays and manages legacy HVAC systems without expensive retrofits. Paired with an intuitive Flutter application for real-time ESG impact tracking and dynamic zone control, EcoMesh delivers a highly viable solution to smart energy management.
 
