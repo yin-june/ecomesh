@@ -87,7 +87,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(builder: (context, appState, _) {
-      final userName = appState.currentUser?['full_name'] ?? 'User';
+      final userName = appState.currentUser?.fullName ?? 'User';
       final unreadCount = _notifications.length;
 
       return SafeArea(

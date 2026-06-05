@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
+
 # --- USER SCHEMAS ---
 class UserCreate(BaseModel):
     email: EmailStr
@@ -70,3 +71,18 @@ class Token(BaseModel):
 
 class TokenPayload(BaseModel):
     sub: Optional[str] = None
+
+# --- ENERGY PROFILE SCHEMAS ---
+class EnergyProfileUpdate(BaseModel):
+    profile_name: str  # e.g. "Deep Work", "Meeting", "Study", "Eco Max"
+    preferred_temp: float  # degrees Celsius, 20.0–28.0
+
+class EnergyProfileResponse(BaseModel):
+    id: int
+    owner_id: int
+    profile_name: str
+    preferred_temp: float
+    auto_standby_timeout_mins: int
+
+    class Config:
+        from_attributes = True
