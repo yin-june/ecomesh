@@ -21,7 +21,7 @@ class EcoMeshApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => AppState(apiBaseUrl: 'http://127.0.0.1:8000'),
+      create: (_) => AppState(apiBaseUrl: 'http://192.168.8.64:8000'), // Updated to machine's local IP
       child: MaterialApp(
         title: 'EcoMesh',
         debugShowCheckedModeBanner: false,

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../theme/app_theme.dart';
 
+import 'package:provider/provider.dart';
+import '../services/app_state.dart';
+
 class IRPairingScreen extends StatefulWidget {
   final String zoneId;
   const IRPairingScreen({super.key, required this.zoneId});
@@ -91,8 +94,6 @@ class _IRPairingScreenState extends State<IRPairingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final step = _steps[_currentStep];
-    
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -110,22 +111,6 @@ class _IRPairingScreenState extends State<IRPairingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const SizedBox(height: 20),
-            // Progress indicator
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(_steps.length, (index) {
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: 30,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: index <= _currentStep ? AppTheme.skyBlue : AppTheme.divider,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                );
-              }),
-            ),
             const Spacer(),
             // Main Icon
             AnimatedContainer(
@@ -143,7 +128,7 @@ class _IRPairingScreenState extends State<IRPairingScreen> {
               ),
               child: Center(
                 child: Icon(
-                  _success ? Icons.check_circle : step['icon'],
+                  _success ? Icons.check_circle : Icons.settings_remote,
                   size: 50,
                   color: _success ? AppTheme.mintGreen : AppTheme.skyBlue,
                 ),
@@ -151,13 +136,13 @@ class _IRPairingScreenState extends State<IRPairingScreen> {
             ),
             const SizedBox(height: 40),
             Text(
-              step['title'],
+              'Record IR Signal',
               style: AppTheme.displayLarge.copyWith(fontSize: 28),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             Text(
-              step['desc'],
+              'Point your AC remote at the hub and press any button to record the signal.',
               style: AppTheme.bodyMedium.copyWith(fontSize: 16, height: 1.5),
               textAlign: TextAlign.center,
             ),
