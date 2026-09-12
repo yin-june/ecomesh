@@ -87,8 +87,8 @@ flowchart TD
 ## Hardware Prototype
 
 <p align="center">
-  <img src="docs/assets/hardware/sensor-node.jpg" alt="EcoMesh sensor node prototype" height="340">
-  <img src="docs/assets/hardware/smart-strip-rotated.png" alt="EcoMesh smart strip prototype" height="340">
+  <img src="docs/assets/hardware/sensor-node.jpg" alt="EcoMesh sensor node prototype" height="220">
+  <img src="docs/assets/hardware/smart-strip-rotated.png" alt="EcoMesh smart strip prototype" height="220">
 </p>
 
 <p align="center"><em>Sensor node (left) and smart strip controller (right).</em></p>
@@ -97,7 +97,7 @@ flowchart TD
 
 <p align="center">
   <a href="docs/assets/hardware/ecomesh-schematic.pdf">
-    <img src="docs/assets/hardware/ecomesh-schematic.png" alt="EcoMesh sensor node and smart strip schematic" width="80%">
+    <img src="docs/assets/hardware/ecomesh-schematic.png" alt="EcoMesh sensor node and smart strip schematic" width="60%">
   </a>
 </p>
 
