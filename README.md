@@ -1,6 +1,107 @@
 # EcoMesh: Smart Energy Management System
 
-EcoMesh is an intelligent, decentralized energy management framework combining Edge-AI, a hybrid-wireless ESP-NOW mesh, and a FastAPI backend to eliminate "Ghost Power" waste in commercial and academic buildings.
+EcoMesh is an affordable residential smart-home energy management system that combines an ESP-NOW device network, retrofit-friendly controls, and a FastAPI backend to reduce household energy waste without costly rewiring.
+
+*Low-Cost, Retrofit-Friendly Smart-Home Integration*
+
+**Pitch Deck**: https://canva.link/cqd7eo5j1rgzzz7
+
+## Abstract / Executive Summary
+
+EcoMesh is a residential energy management prototype that makes smart-home integration accessible to more households. It combines low-cost ESP32 devices, high-fidelity mmWave sensing (HLK-LD2410B), universal IR/RF control, and smart relays to automate existing lights, appliances, and air-conditioning units. By detecting subtle human presence, EcoMesh can reduce standby "ghost power" and manage household devices without replacing them or rewiring the home. A Flutter application provides room controls and personalized comfort profiles from one simple interface.
+
+## Problem Statement
+
+Massive amounts of electricity are wasted daily due to inefficient energy usage practices:
+
+- **Behavioral Neglect**: Lights, air-conditioning, and appliances are frequently left running in empty rooms. Standard motion sensors fail to detect stationary users, creating "environmental friction" that leads users to disable automation.
+- **Standby Waste**: "Ghost power" is continuously drawn by idle devices like monitors and chargers.
+- **Costly Smart-Home Upgrades**: Many smart-home products require replacing working appliances, buying multiple proprietary hubs, or modifying household wiring, putting them out of reach for renters and budget-conscious homeowners.
+
+## Solution Overview & System Architecture
+
+EcoMesh turns an existing home into a connected, responsive environment using affordable add-on devices that work with appliances people already own.
+
+```mermaid
+flowchart TD
+    %% Styling
+    classDef frontend fill:#02569B,stroke:#0175C2,stroke-width:2px,color:white;
+    classDef backend fill:#009688,stroke:#00796B,stroke-width:2px,color:white;
+    classDef firmware fill:#E65100,stroke:#F57C00,stroke-width:2px,color:white;
+    classDef db fill:#455A64,stroke:#37474F,stroke-width:2px,color:white;
+
+    subgraph Frontend["📱 Flutter App (UX & Orchestration)"]
+        UI[Mobile Dashboard & Profiles]:::frontend
+    end
+
+    subgraph Backend["🧠 Backend (FastAPI & Data)"]
+        API[FastAPI Server]:::backend
+        Broker[MQTT Broker]:::backend
+        PG[(PostgreSQL)]:::db
+        TSDB[(InfluxDB)]:::db
+
+        API <--> Broker
+        API <--> PG
+        API <--> TSDB
+    end
+
+    subgraph Firmware["🔌 Firmware & Hardware (ESP32 Devices)"]
+        Hub[ESP32 Gateway Hub]:::firmware
+        Node[ESP32 Sensory Nodes]:::firmware
+        Relay[4-Channel Smart Relay]
+        IR[IR/RF Transceiver]
+        Sensor[mmWave Radar & PZEM-004T]
+
+        Node -- "ESP-NOW Mesh" --> Hub
+        Sensor --> Node
+        Hub --> Relay
+        Hub --> IR
+    end
+
+    %% Cross-layer communication
+    UI -- "REST API / WebSockets" --> API
+    Hub -- "MQTTS Telemetry & Commands" <--> Broker
+```
+
+- **Hardware & Perception Layer (The "Nerves")**: Utilizes low-cost HLK-LD2410B mmWave Radar and ESP32-C3 nodes to detect subtle movement, ensuring accurate room occupancy detection even when residents are completely still (passing the "Breathing Test"). Household energy use is measured via PZEM-004T.
+- **Control & Execution Layer (The "Muscle")**: Universal retrofitting through an integrated IR/RF transceiver that clones legacy remote commands. A 4-Channel Relay physically cuts circuits to idle devices when a room is vacated, killing "ghost power".
+- **Connectivity & Automation Layer (The "Brain")**: FastAPI, MQTT, PostgreSQL, and InfluxDB coordinate device commands, household telemetry, room status, and automation rules across the home.
+- **User Experience (The "Experience")**: A minimal Flutter app lets residents control rooms and create personalized comfort profiles that follow them around the home.
+
+## Key Features & Innovation
+
+- **"Follow-Me" Home Profiles**: Personalized comfort and energy settings can follow residents between rooms instead of relying on rigid schedules.
+- **Occupancy-Triggered "Ghost Power Hunter"**: Doesn't just turn off lights; it physically severs power to standby electronics when a room becomes vacant.
+- **Affordable Retrofitting**: Low-cost controllers clone existing IR/RF remote signals and switch existing circuits, bringing smart-home features to ordinary homes without replacing appliances or rewiring.
+- **Unified Household Control**: One mobile interface brings room status, appliance control, and automation settings together.
+
+## Tech Stack
+
+- **Hardware**: ESP32-S3 (Gateway Hub), ESP32-C3 (Sensory Nodes), HLK-LD2410B mmWave Radar, 4-Channel Relay, PZEM-004T, IR/RF Transceiver
+- **Firmware**: C++ (PlatformIO / ESP-IDF)
+- **Backend API**: FastAPI (Python), SQLAlchemy
+- **Databases**: PostgreSQL (Relational Data), InfluxDB (Time-Series Telemetry)
+- **Frontend App**: Flutter (Dart)
+- **IoT Messaging**: MQTT (over TLS/SSL)
+
+## Hardware Prototype
+
+<p align="center">
+  <img src="docs/assets/hardware/sensor-node.jpg" alt="EcoMesh sensor node prototype" height="340">
+  <img src="docs/assets/hardware/smart-strip-rotated.png" alt="EcoMesh smart strip prototype" height="340">
+</p>
+
+<p align="center"><em>Sensor node (left) and smart strip controller (right).</em></p>
+
+### System Schematic
+
+<p align="center">
+  <a href="docs/assets/hardware/ecomesh-schematic.pdf">
+    <img src="docs/assets/hardware/ecomesh-schematic.png" alt="EcoMesh sensor node and smart strip schematic" width="80%">
+  </a>
+</p>
+
+<p align="center"><em>Click the schematic to open the original PDF.</em></p>
 
 ---
 
@@ -110,18 +211,7 @@ Token: ecomesh-secure-token
 1. Run `docker compose up --build`.
 2. Wait for PostgreSQL to finish initialization.
 3. Open InfluxDB once, complete any first-time setup if needed, and confirm the bucket exists.
-4. Seed or ingest telemetry before training, because the ML pipeline expects `zone_telemetry` rows with `energy_draw_kwh`, `occupancy_count`, and `outdoor_temp`.
-5. Train the model with:
-
-```bash
-docker compose exec backend python -m ml_engine.pipelines.train_pipelines
-```
-
-If you do not have live telemetry yet, generate sample dev data first:
-
-```bash
-docker compose exec backend python -m ml_engine.pipelines.seed_sample_telemetry
-```
+4. Power on the hub and sensor nodes, then confirm that room telemetry appears in the Flutter app.
 
 ## Local Non-Docker Mode
 
@@ -132,7 +222,6 @@ cd backend
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-python -m ml_engine.pipelines.train_pipelines
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
