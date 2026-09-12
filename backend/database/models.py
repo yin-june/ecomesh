@@ -16,6 +16,21 @@ class User(Base):
 
     # Relationship to customized energy profiles (Deep Work, Meeting, etc.)
     profiles = relationship("EnergyProfile", back_populates="owner")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False)
+    body = Column(String, nullable=False)
+    type = Column(String, default="summary") # 'arrival', 'saving', 'warning', 'summary'
+    timestamp = Column(String, nullable=False) # Store as ISO string for SQLite compatibility
+    is_read = Column(Boolean, default=False)
+
+    user = relationship("User", back_populates="notifications")
 
 
 class Zone(Base):

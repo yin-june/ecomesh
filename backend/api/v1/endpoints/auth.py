@@ -8,6 +8,7 @@ from config.database import get_db
 from database import models, schemas
 from core.security import verify_password, get_password_hash, create_access_token
 from config.settings import get_settings
+from database.schemas import EnergyProfileUpdate, EnergyProfileResponse
 
 settings = get_settings()
 router = APIRouter()
@@ -74,3 +75,48 @@ def login_access_token(db: Session = Depends(get_db), form_data: OAuth2PasswordR
 def read_user_me(current_user: models.User = Depends(get_current_user)):
     """Returns the profile and ESG impact score of the currently logged-in user."""
     return current_user
+
+
+@router.get("/energy-profile", response_model=EnergyProfileResponse)
+def get_energy_profile(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Returns the current user's saved energy profile (preferred preset + temperature).
+    Used by ProfileScreen on load to restore slider/preset values.
+    """
+    profile = db.query(models.EnergyProfile).filter(
+        models.EnergyProfile.owner_id == current_user.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="No energy profile set yet")
+    return profile
+
+
+@router.put("/energy-profile", response_model=EnergyProfileResponse)
+def upsert_energy_profile(
+    update: EnergyProfileUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Creates or updates the current user's energy profile.
+    Stored in the EnergyProfile table and automatically applied
+    when the user claims a desk via PUT /zones/{zone_id}/desks/{desk_id}/claim.
+    """
+    profile = db.query(models.EnergyProfile).filter(
+        models.EnergyProfile.owner_id == current_user.id
+    ).first()
+
+    if profile:
+        profile.profile_name = update.profile_name
+        profile.preferred_temp = update.preferred_temp
+    else:
+        profile = models.EnergyProfile(
+            owner_id=current_user.id,
+            profile_name=update.profile_name,
+            preferred_temp=update.preferred_temp,
+        )
+        db.add(profile)
+
+    db.commit()
+    db.refresh(profile)
+    return profile

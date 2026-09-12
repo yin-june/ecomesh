@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../services/app_state.dart';
+import '../models/user_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -14,17 +15,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _gpsEnabled = true;
   bool _bluetoothEnabled = true;
   bool _pushNotifications = true;
-  String _selectedPreset = 'Deep Work';
-  double _tempPref = 24.0;
+
+  // Local mirror of appState values — initialised in didChangeDependencies
+  late double _tempPref;
+  late String _selectedPreset;
+  bool _localInitialized = false;
 
   final presets = ['Deep Work', 'Meeting', 'Study', 'Eco Max'];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Initialise local copies once from AppState (avoids overwriting mid-drag)
+    if (!_localInitialized) {
+      final appState = context.read<AppState>();
+      _tempPref = appState.tempPref;
+      _selectedPreset = appState.selectedPreset;
+      _localInitialized = true;
+    }
+  }
+
+  /// Persist to backend + show feedback snackbar
+  Future<void> _saveProfile(AppState appState) async {
+    final ok = await appState.saveEnergyProfile(
+      profileName: _selectedPreset,
+      preferredTemp: _tempPref,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? '✅ Profile saved' : '⚠️ Saved locally (offline)',
+          style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: ok ? AppTheme.skyBlue : Colors.orange.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(builder: (context, appState, _) {
       final user = appState.currentUser;
-      final userName = user?['full_name'] ?? 'User';
-      final userEmail = user?['email'] ?? 'user@example.com';
 
       return SafeArea(
         child: SingleChildScrollView(
@@ -34,14 +69,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Profile',
-                  style:
-                      AppTheme.displayLarge.copyWith(fontSize: 26)),
+                  style: AppTheme.displayLarge.copyWith(fontSize: 26)),
               const SizedBox(height: 20),
-              _buildProfileCard(userName, userEmail),
+              _buildProfileCard(user),
               const SizedBox(height: 20),
-              _buildPresetsSection(),
+              _buildEsgCard(user),
               const SizedBox(height: 20),
-              _buildTempSection(),
+              _buildPresetsSection(appState),
+              const SizedBox(height: 20),
+              _buildTempSection(appState),
               const SizedBox(height: 20),
               _buildPermissionsSection(),
               const SizedBox(height: 20),
@@ -54,7 +90,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  Widget _buildProfileCard(String userName, String userEmail) {
+  // ─── Profile Card ──────────────────────────────────────────────────────────
+  Widget _buildProfileCard(UserModel? user) {
+    final userName = user?.fullName ?? 'User';
+    final userEmail = user?.email ?? 'user@example.com';
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -109,7 +149,89 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildPresetsSection() {
+  // ─── ESG Points Card ───────────────────────────────────────────────────────
+  Widget _buildEsgCard(UserModel? user) {
+    final points = user?.esgPoints ?? 0;
+    final tier = points >= 500
+        ? ('🌟 Platinum', AppTheme.skyBlue)
+        : points >= 200
+            ? ('🥇 Gold', const Color(0xFFDAA520))
+            : points >= 50
+                ? ('🥈 Silver', const Color(0xFF9E9E9E))
+                : ('🌱 Starter', const Color(0xFF66BB6A));
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Row(
+        children: [
+          // Points circle
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              gradient: AppTheme.heroGradient,
+              shape: BoxShape.circle,
+              boxShadow: AppTheme.cardShadow,
+            ),
+            child: Center(
+              child: Text(
+                '$points',
+                style: const TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ESG Impact Points',
+                  style: AppTheme.headingMedium.copyWith(fontSize: 14),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Earned by saving energy and reducing emissions',
+                  style: AppTheme.bodyMedium.copyWith(fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: tier.$2.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: tier.$2.withOpacity(0.4)),
+            ),
+            child: Text(
+              tier.$1,
+              style: TextStyle(
+                fontFamily: 'Nunito',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: tier.$2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Presets Section ───────────────────────────────────────────────────────
+  Widget _buildPresetsSection(AppState appState) {
     return _SectionCard(
       title: 'Energy Presets',
       child: Column(
@@ -121,7 +243,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: presets.map((preset) {
               final isSelected = preset == _selectedPreset;
               return GestureDetector(
-                onTap: () => setState(() => _selectedPreset = preset),
+                onTap: () {
+                  setState(() => _selectedPreset = preset);
+                  _saveProfile(appState);
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.symmetric(
@@ -157,9 +282,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildTempSection() {
+  // ─── Temperature Section ───────────────────────────────────────────────────
+  Widget _buildTempSection(AppState appState) {
+    final isSaving = appState.isSavingProfile;
+
     return _SectionCard(
-      title: 'Temperature Preference', 
+      title: 'Temperature Preference',
+      trailing: isSaving
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.skyBlue),
+            )
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -214,25 +349,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
               min: 20,
               max: 28,
               divisions: 16,
+              // Update UI in real time while dragging
               onChanged: (v) => setState(() => _tempPref = v),
+              // Save to backend only when the user releases the slider
+              onChangeEnd: (v) {
+                setState(() => _tempPref = v);
+                _saveProfile(appState);
+              },
             ),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('20°C',
-                  style:
-                      AppTheme.bodyMedium.copyWith(fontSize: 11)),
+                  style: AppTheme.bodyMedium.copyWith(fontSize: 11)),
               Text('28°C',
-                  style:
-                      AppTheme.bodyMedium.copyWith(fontSize: 11)),
+                  style: AppTheme.bodyMedium.copyWith(fontSize: 11)),
             ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Auto-applied when you claim a desk via Bluetooth.',
+            style: AppTheme.bodyMedium.copyWith(fontSize: 10),
           ),
         ],
       ),
     );
   }
 
+  // ─── Permissions Section ───────────────────────────────────────────────────
   Widget _buildPermissionsSection() {
     return _SectionCard(
       title: 'Permissions',
@@ -267,6 +412,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ─── App Settings Section ──────────────────────────────────────────────────
   Widget _buildSettingsSection(AppState appState) {
     return _SectionCard(
       title: 'App Settings',
@@ -328,14 +474,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// ─── Shared widgets ────────────────────────────────────────────────────────────
+// ─── Shared Widgets ─────────────────────────────────────────────────────────
+
 class _SectionCard extends StatelessWidget {
   final String title;
   final Widget child;
+  final Widget? trailing;
 
   const _SectionCard({
     required this.title,
     required this.child,
+    this.trailing,
   });
 
   @override
@@ -352,7 +501,10 @@ class _SectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(title, style: AppTheme.headingMedium.copyWith(fontSize: 15)),
+              Text(title,
+                  style: AppTheme.headingMedium.copyWith(fontSize: 15)),
+              const Spacer(),
+              if (trailing != null) trailing!,
             ],
           ),
           child,
@@ -424,11 +576,9 @@ class _MenuRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style:
-                        AppTheme.headingMedium.copyWith(fontSize: 13)),
+                    style: AppTheme.headingMedium.copyWith(fontSize: 13)),
                 Text(subtitle,
-                    style:
-                        AppTheme.bodyMedium.copyWith(fontSize: 11)),
+                    style: AppTheme.bodyMedium.copyWith(fontSize: 11)),
               ],
             ),
           ),

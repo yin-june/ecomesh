@@ -76,7 +76,7 @@ esp_err_t ir_ctrl_init(void) {
         .gpio_num = IR_RX_GPIO_NUM,
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 1000000,       // 1 tick = 1 microsecond
-        .mem_block_symbols = 64,
+        .mem_block_symbols = 256,       // Increased to 256 to prevent hardware overflow on long AC frames
         .flags = {
             .invert_in = 1,
         }

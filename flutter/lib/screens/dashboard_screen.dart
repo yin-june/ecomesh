@@ -20,6 +20,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   
   List<Map<String, dynamic>> _zones = [];
   List<Map<String, dynamic>> _notifications = [];
+  Map<String, dynamic> _telemetries = {};
+  Map<String, dynamic> _impact = {};
+  double _totalDrawW = 0.0;
+  double _avgTemp = 24.0;
+  int _activeZoneCount = 0;
+  int _unreadCount = 0;
+
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -35,14 +42,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final appState = context.read<AppState>();
       
-      final zones = await appState.zoneService.getZones();
-      final notifications =
-          await appState.notificationService.getNotifications(limit: 5);
+      final zonesRaw = await appState.zoneService.getZones() ?? [];
+      final notificationsRaw =
+          await appState.notificationService.getNotifications(limit: 5) ?? [];
       
+      final unreadCount = await appState.notificationService.getUnreadCount();
+          
+      // Fetch telemetry for all zones
+      final telemetryFutures = zonesRaw.map((z) => 
+          appState.zoneService.getZoneTelemetry(z['id'] as String)
+              .catchError((_) => <String, dynamic>{})
+      );
+      final telemetriesRaw = await Future.wait(telemetryFutures);
+
+      final Map<String, dynamic> telemetries = {};
+      double totalW = 0.0;
+      double sumTemp = 0.0;
+      int activeCount = 0;
+
+      for (int i = 0; i < zonesRaw.length; i++) {
+        final zId = zonesRaw[i]['id'] as String;
+        final tData = telemetriesRaw[i];
+        telemetries[zId] = tData;
+
+        final kwh = (tData['energy_draw_kwh'] as num?)?.toDouble() ?? 0.0;
+        totalW += kwh * 1000;
+        final temp = (tData['temperature'] as num?)?.toDouble() ?? 24.0;
+        sumTemp += temp;
+        
+        final status = tData['status'] as String? ?? 'idle';
+        if (status == 'active' || status == 'ghost') {
+          activeCount++;
+        }
+      }
+      
+      double avgTemp = zonesRaw.isNotEmpty ? sumTemp / zonesRaw.length : 24.0;
+
+      // Quick estimate for impact
+      final user = appState.currentUser;
+      final esgPoints = user?.esgPoints ?? 0;
+      final double kwhBasis = esgPoints * 0.1;
+      
+      Map<String, dynamic> impactRaw = {};
+      try {
+        impactRaw = await appState.analyticsService.getUserImpact(kwhBasis);
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
-          _zones = zones ?? [];
-          _notifications = notifications ?? [];
+          _zones = zonesRaw;
+          _notifications = notificationsRaw;
+          _telemetries = telemetries;
+          _totalDrawW = totalW;
+          _avgTemp = avgTemp;
+          _activeZoneCount = activeCount;
+          _unreadCount = unreadCount;
+          _impact = impactRaw;
           _isLoading = false;
           _errorMessage = null;
         });
@@ -87,8 +142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(builder: (context, appState, _) {
-      final userName = appState.currentUser?['full_name'] ?? 'User';
-      final unreadCount = _notifications.length;
+      final userName = appState.currentUser?.fullName ?? 'User';
 
       return SafeArea(
         child: SingleChildScrollView(
@@ -99,7 +153,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 20),
-                _buildHeader(userName, unreadCount),
+                _buildHeader(userName, _unreadCount, appState),
                 const SizedBox(height: 20),
                 _buildStatusBanner(),
                 if (_showSensorFeed) ...[
@@ -125,7 +179,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 20),
                   _buildActiveZonesList(),
                   const SizedBox(height: 20),
-                  _buildNotificationsSection(unreadCount),
+                  _buildNotificationsSection(),
                 ],
                 const SizedBox(height: 32),
               ],
@@ -136,7 +190,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  Widget _buildHeader(String userName, int unreadCount) {
+  Widget _buildHeader(String userName, int unreadCount, AppState appState) {
     return Row(
       children: [
         Expanded(
@@ -158,7 +212,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Stack(
           children: [
             GestureDetector(
-              onTap: () {},
+              onTap: () {
+                _showNotificationsSheet(appState);
+              },
               child: Container(
                 width: 44,
                 height: 44,
@@ -257,7 +313,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const Spacer(),
               Text(
-                '24.0°C',
+                '${_avgTemp.toStringAsFixed(1)}°C',
                 style: TextStyle(
                   fontFamily: 'Nunito',
                   fontSize: 13,
@@ -271,9 +327,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(
             _awayMode
                 ? 'Away Mode Active\nLights dimmed to 30%'
-                : _zones.isEmpty
-                    ? 'No active zones'
-                    : 'Zones Active\n${_zones.length} zone(s) connected',
+                : _activeZoneCount == 0
+                    ? 'No zones active'
+                    : 'Zones Active\n$_activeZoneCount zone(s) consuming power',
             style: const TextStyle(
               fontFamily: 'Nunito',
               fontSize: 18,
@@ -287,7 +343,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               _statChip(
                 icon: Icons.bolt_rounded,
-                label: _awayMode ? '0.3kWh/h' : '318W draw',
+                label: _awayMode ? '0.3kWh/h' : '${_totalDrawW.toStringAsFixed(0)}W draw',
               ),
               const SizedBox(width: 8),
               _statChip(
@@ -373,12 +429,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildQuickStats() {
+    final double rmSavedWeek = (_impact['rm_saved'] as num?)?.toDouble() ?? 0.0;
+    final double treesSaved = (_impact['trees_equivalent'] as num?)?.toDouble() ?? 0.0;
+    
+    // Approximate daily savings from weekly estimate
+    final double rmSavedToday = rmSavedWeek / 7;
+
     return Row(
       children: [
         _StatCard(
-          label: "Today's Saving",
-          value: 'RM0.60',
-          sub: '1.2 kWh saved',
+          label: "Avg Daily Saving",
+          value: 'RM${rmSavedToday.toStringAsFixed(2)}',
+          sub: 'Based on weekly',
           icon: '💰',
           color: AppTheme.textDark,
           bgColor: AppTheme.iceBlue,
@@ -386,7 +448,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(width: 12),
         _StatCard(
           label: 'Trees Saved',
-          value: '2.5',
+          value: treesSaved.toStringAsFixed(1),
           sub: 'Equiv. offsets',
           icon: '🌳',
           color: AppTheme.textDark,
@@ -395,7 +457,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(width: 12),
         _StatCard(
           label: 'Active Zones',
-          value: '${_zones.length}',
+          value: '$_activeZoneCount',
           sub: 'Running now',
           icon: '📡',
           color: AppTheme.textDark,
@@ -431,11 +493,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ..._zones.asMap().entries.map((entry) {
           final index = entry.key;
           final zone = entry.value;
+          final telemetry = _telemetries[zone['id'] as String];
+          
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: ZoneStatusCard(
               zoneIndex: index,
-              zoneName: zone['name'] ?? 'Zone ${index + 1}',
+              zoneData: zone,
+              telemetry: telemetry,
+              zoneName: zone['name'] as String?,
             ),
           );
         }),
@@ -443,7 +509,77 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildNotificationsSection(int unreadCount) {
+  void _showNotificationsSheet(AppState appState) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: const BoxDecoration(
+          color: AppTheme.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.paleSky,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Notifications', style: AppTheme.headingMedium),
+                if (_unreadCount > 0)
+                  TextButton(
+                    onPressed: () async {
+                      await appState.notificationService.markAllAsRead();
+                      _loadData();
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    child: Text(
+                      'Mark all as read',
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: AppTheme.skyBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _notifications.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No notifications',
+                        style: AppTheme.bodyMedium.copyWith(color: AppTheme.textLight),
+                      ),
+                    )
+                  : ListView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: _notifications.length,
+                      itemBuilder: (context, index) {
+                        return _buildNotifItem(_notifications[index]);
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -497,11 +633,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final title = notif['title'] ?? 'Notification';
     final body = notif['body'] ?? '';
     final isRead = notif['is_read'] ?? false;
+    final notifId = notif['id'] as String?;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
+    return GestureDetector(
+      onTap: () async {
+        if (!isRead && notifId != null) {
+          final appState = context.read<AppState>();
+          await appState.notificationService.markAsRead(notifId);
+          _loadData();
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
         color: isRead ? AppTheme.white : AppTheme.iceBlue,
         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         border: Border.all(
@@ -548,6 +693,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+     ),
     );
   }
 }

@@ -17,7 +17,13 @@ static const gpio_num_t RELAY_PINS[] = {
 static bool relay_states[NUM_CHANNELS] = {false, false, false, false};
 
 void relay_ctrl_init(void) {
-    ESP_LOGI(TAG, "Initializing 4-Channel Relay GPIOs (Low-Level Trigger)...");
+    ESP_LOGI(TAG, "Initializing 4-Channel Relay GPIOs (High-Level Trigger)...");
+
+    // Set initial state to OFF (LOW level for High-Level Trigger) BEFORE configuring as output.
+    for (int i = 0; i < NUM_CHANNELS; i++) {
+        gpio_set_level(RELAY_PINS[i], 0); // 0 = LOW = Relay OFF
+        relay_states[i] = false;
+    }
 
     // Configure the GPIO pins as output
     gpio_config_t io_conf = {
@@ -34,11 +40,6 @@ void relay_ctrl_init(void) {
         return;
     }
 
-    // Set initial state to OFF (HIGH level for Low-Level Trigger)
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        gpio_set_level(RELAY_PINS[i], 1); // 1 = HIGH = Relay OFF
-        relay_states[i] = false;
-    }
     ESP_LOGI(TAG, "Relay initialization complete. All channels OFF.");
 }
 
@@ -48,15 +49,15 @@ void relay_ctrl_set(int channel, bool state) {
         return;
     }
 
-    // Low-Level Trigger:
-    // state == true  -> pin = 0 (LOW)  -> Relay ON
-    // state == false -> pin = 1 (HIGH) -> Relay OFF
-    int level = state ? 0 : 1;
+    // High-Level Trigger:
+    // state == true  -> pin = 1 (HIGH) -> Relay ON
+    // state == false -> pin = 0 (LOW)  -> Relay OFF
+    int level = state ? 1 : 0;
     gpio_set_level(RELAY_PINS[channel], level);
     relay_states[channel] = state;
     
     ESP_LOGI(TAG, "Relay Channel %d set to %s (%s)", 
-             channel, state ? "ON" : "OFF", state ? "Pin LOW" : "Pin HIGH");
+             channel, state ? "ON" : "OFF", state ? "Pin HIGH" : "Pin LOW");
 }
 
 void relay_ctrl_toggle(int channel) {
